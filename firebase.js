@@ -13,13 +13,13 @@
 */
 
 const FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  databaseURL: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyAp2S4de2GlGrygZNdhuZTtngBvgIJTRU8",
+  authDomain: "hamza-a0a8b.firebaseapp.com",
+  databaseURL: "https://hamza-a0a8b-default-rtdb.firebaseio.com",
+  projectId: "hamza-a0a8b",
+  storageBucket: "hamza-a0a8b.firebasestorage.app",
+  messagingSenderId: "324557425333",
+  appId: "1:324557425333:web:bd17bcf838d47d6aee4cfc"
 };
 
 /* المستخدمان المسموح لهما فقط */
