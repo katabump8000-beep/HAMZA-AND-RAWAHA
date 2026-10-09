@@ -22,7 +22,16 @@
 </div>
 
 <!-- ============ شاشة 1: كلمة السر ============ -->
-<section id="screen-password" class="screen active">
+<!-- ============ شاشة 0: جار التحميل ============ -->
+<section id="screen-loading" class="screen active">
+  <div class="loading-box">
+    <div class="loader-ring"></div>
+    <p class="loading-text">جار التحميل<span class="dots"><i>.</i><i>.</i><i>.</i></span></p>
+  </div>
+</section>
+
+<!-- ============ شاشة 1: كلمة السر ============ -->
+<section id="screen-password" class="screen">
   <div class="glass-panel">
     <div class="lock-3d">🔒</div>
     <h1 class="screen-title">مرحباً بك</h1>
@@ -100,8 +109,11 @@
         <span class="inbox-my-note" id="inbox-my-note">متصل الآن</span>
       </div>
     </div>
+    <button id="btn-hack" class="hack-btn" title="تهكير">تهكير <span class="skull">💀</span></button>
     <button id="btn-inbox-settings" class="icon-btn" title="الإعدادات">⚙️</button>
   </div>
+
+  <div class="mode-banner" id="mode-banner">⚠️ الوضع المحلي: الرسائل لن تصل لجهاز آخر — يلزم ملء إعدادات Firebase في firebase.js</div>
 
   <h2 class="inbox-title">المحادثات</h2>
   <div class="inbox-list" id="inbox-list"></div>
@@ -109,6 +121,8 @@
   <div class="inbox-footer">
     <button id="btn-inbox-refresh" class="btn btn-ghost small">🔄 تحديث</button>
   </div>
+
+  <div class="wave-deco"><i></i><i></i><i></i></div>
 </section>
 
 <!-- ============ شاشة 5: الشات ============ -->
@@ -121,12 +135,30 @@
       <div class="header-avatar" id="hdr-avatar">?</div>
       <div class="header-info">
         <span class="hdr-name" id="hdr-name">...</span>
+        <span class="hdr-note" id="hdr-note"></span>
         <span class="hdr-status" id="hdr-status">غير متصل</span>
       </div>
     </div>
     <button id="btn-settings" class="icon-btn" title="الإعدادات">⚙️</button>
     <button id="btn-palette" class="icon-btn" title="الألوان">🎨</button>
+    <button id="btn-more" class="icon-btn" title="المزيد">⋮</button>
   </header>
+
+  <!-- قائمة ⋮ -->
+  <div class="chat-menu" id="chat-menu">
+    <button class="menu-item" data-act="search"><span>🔍</span> بحث في الشات</button>
+    <button class="menu-item" data-act="refresh"><span>🔄</span> تحديث الشات</button>
+    <button class="menu-item danger" data-act="clear"><span>🗑️</span> مسح الشات بالكامل</button>
+  </div>
+
+  <!-- شريط البحث + النتائج -->
+  <div class="search-bar" id="search-bar">
+    <div class="search-row">
+      <input id="search-input" type="search" placeholder="ابحث في الرسائل..." autocomplete="off">
+      <button id="search-close" class="icon-btn small">✕</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
+  </div>
 
   <!-- شريط الألوان -->
   <div class="palette-bar" id="palette-bar">
@@ -146,6 +178,7 @@
     <input type="file" id="set-avatar" accept="image/*" hidden>
     <button id="set-save" class="btn btn-primary small">حفظ الإعدادات</button>
     <button id="set-close" class="btn btn-ghost small">إغلاق</button>
+    <button id="set-logout" class="btn btn-ghost small">🚪 تبديل الحساب</button>
   </div>
 
   <!-- بطاقة البروفايل -->
@@ -250,6 +283,26 @@
   <div class="toast" id="toast"></div>
 
 </section>
+
+<!-- نافذة التأكيد -->
+<div class="confirm-modal" id="confirm-modal">
+  <div class="cm-box">
+    <h3 id="cm-title"></h3>
+    <p id="cm-text"></p>
+    <div class="cm-btns">
+      <button id="cm-cancel" class="btn btn-ghost small">إلغاء</button>
+      <button id="cm-ok" class="btn btn-primary small">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<!-- شاشة فخ التهكير -->
+<div class="hack-overlay" id="hack-overlay">
+  <div class="hack-scan"></div>
+  <div class="hack-big">💀</div>
+  <div class="hack-msg glitch" data-text="أنت لست حمزة أو رواحة">أنت لست حمزة أو رواحة</div>
+  <div class="hack-sub">تم تسجيل خروجك</div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>

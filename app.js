@@ -52,7 +52,7 @@ function checkPassword() {
   const v = $('#password-input').value.trim();
   if (v === PASSWORD) {
     $('#password-error').textContent = '';
-    goTo('screen-permissions');
+    goTo(localStorage.getItem('perms_done') ? 'screen-identity' : 'screen-permissions');
   } else {
     $('#password-error').textContent = 'كلمة السر غير صحيحة';
     $('#password-input').value = '';
@@ -75,7 +75,7 @@ function shake(el) {
    ============================================================ */
 $('#bell-3d').addEventListener('click', requestAllPerms);
 $('#btn-request-perms').addEventListener('click', requestAllPerms);
-$('#btn-skip-perms').addEventListener('click', () => goTo('screen-identity'));
+$('#btn-skip-perms').addEventListener('click', () => { localStorage.setItem('perms_done', '1'); goTo('screen-identity'); });
 
 async function requestAllPerms() {
   const bell = $('#bell-3d');
@@ -101,6 +101,7 @@ async function requestAllPerms() {
   if (allOk) {
     $('#btn-request-perms').classList.add('done');
     $('#btn-request-perms').textContent = '✔ تم منح جميع الأذونات';
+    localStorage.setItem('perms_done', '1');
     setTimeout(() => goTo('screen-identity'), 700);
   } else {
     toast('بعض الأذونات مرفوضة — اضغط تخطي للمتابعة');
@@ -124,19 +125,38 @@ async function requestStorage() { return true; }
    3) اختيار الهوية
    ============================================================ */
 $$('.identity-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    State.user = btn.dataset.user;
-    document.body.dataset.theme = State.user;
-    const savedColor = localStorage.getItem('themeColor_' + State.user);
-    if (savedColor) {
-      State.themeColor = savedColor;
-      const c = THEME_COLORS.find(x => x.id === savedColor);
-      if (c) document.documentElement.style.setProperty('--accent', c.v);
-    }
-    buildPalette();
-    enterInbox();
-  });
+  btn.addEventListener('click', () => startSession(btn.dataset.user));
 });
+
+/* بدء جلسة مستخدم (من اختيار الهوية أو من الجلسة المحفوظة) */
+function startSession(user) {
+  State.user = user;
+  document.body.removeAttribute('style');          // تصفير ألوان سابقة
+  document.body.dataset.theme = user;
+  const savedColor = localStorage.getItem('themeColor_' + user);
+  State.themeColor = savedColor || null;
+  const c = THEME_COLORS.find(x => x.id === savedColor);
+  if (c) applyThemeColor(c.v);
+  localStorage.setItem('session_v1', JSON.stringify({ user, t: Date.now() }));
+  buildPalette();
+  enterInbox();
+}
+
+/* تسجيل الخروج ومسح الجلسة */
+function logout() {
+  stopListeners();
+  State.user = null; State.currentChat = null; State.messages = {}; State.others = {}; State.note = '';
+  localStorage.removeItem('session_v1');
+  document.body.removeAttribute('style');
+  delete document.body.dataset.theme;
+  $('#messages').innerHTML = '';
+  $('#password-input').value = '';
+  $('#settings-panel').classList.remove('open');
+  $('#profile-card').classList.remove('open');
+  $('#palette-bar').classList.remove('open');
+  closeSearch();
+  goTo('screen-password');
+}
 
 /* ============================================================
    4) قائمة المحادثات
@@ -157,6 +177,50 @@ function belongsToChat(msg, me, other) {
   );
 }
 
+/* هل أنا أشاهد هذا الشات الآن فعلاً؟ */
+function isViewing(other) {
+  return State.currentChat === other
+    && $('#screen-chat').classList.contains('active')
+    && !document.hidden;
+}
+
+/* رسالة واردة: تعليمها "وصلت" ثم "شوهدت" إن كان الشات مفتوحاً */
+function handleIncoming(m, other, id) {
+  const chatId = Store.chatIdOf(State.user, other);
+  const patch = {};
+  const firstTime = !m.delivered;
+  if (!m.delivered) { patch.delivered = true; patch.deliveredAt = Date.now(); m.delivered = true; }
+  if (!m.seen && isViewing(other)) { patch.seen = true; patch.seenAt = Date.now(); m.seen = true; }
+  if (Object.keys(patch).length) Store.updateMessage(chatId, id, patch).catch(() => {});
+  if (firstTime && !isViewing(other)) notifyIncoming(m, other);
+}
+
+function notifyIncoming(m, other) {
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if ((Date.now() - (m.timestamp || 0)) > 120000) return;     // تجاهل الرسائل القديمة
+    const body = m.type === 'image' ? '📷 صورة' : m.type === 'audio' ? '🎵 تسجيل صوتي'
+               : m.type === 'file' ? '📄 ' + (m.fileName || 'ملف') : (m.text || '');
+    new Notification((State.others[other] || {}).name || USERS[other].name, { body });
+  } catch (e) {}
+}
+
+/* تعليم كل رسائل الطرف الآخر كمشاهدة (عند فتح الشات / العودة للصفحة) */
+function markAllSeen(other) {
+  if (!isViewing(other)) return;
+  const chatId = Store.chatIdOf(State.user, other);
+  (State.messages[other] || []).forEach(m => {
+    if (m.to === State.user && !m.seen) {
+      m.seen = true;
+      Store.updateMessage(chatId, m._id, { seen: true, seenAt: Date.now(), delivered: true }).catch(() => {});
+    }
+  });
+  renderInbox();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && State.currentChat) markAllSeen(State.currentChat);
+});
+
 function onChatMessage(kind, other, msg, id) {
   const list = State.messages[other] || (State.messages[other] = []);
   const idx = list.findIndex(m => m._id === id);
@@ -174,6 +238,8 @@ function onChatMessage(kind, other, msg, id) {
   const full = { ...msg, _id: id };
   if (idx >= 0) list[idx] = full; else list.push(full);
 
+  if (full.to === State.user) handleIncoming(full, other, id);
+
   if (State.currentChat === other) {
     renderMessage(full, id);
     if (kind === 'added') scrollToBottom();
@@ -185,11 +251,17 @@ function enterInbox() {
   goTo('screen-inbox');
   initInbox();
   loadMyProfile();
+  State.currentChat = null;
+  $('#mode-banner').style.display = Store.isOnline() ? 'none' : 'block';
 
-  /* تنظيف أي مستمعين/مؤقتات قديمة (مثلاً عند تبديل الهوية) */
+  Store.updateLastSeen(State.user);
+  startListeners();
+}
+
+function startListeners() {
+  /* تنظيف أي مستمعين/مؤقتات قديمة */
   stopListeners();
   State.messages = {};
-  State.currentChat = null;
 
   Store.updateLastSeen(State.user);
   State.lastSeenTimer = setInterval(() => Store.updateLastSeen(State.user), 20000);
@@ -201,7 +273,6 @@ function enterInbox() {
     if (State.currentChat) updateChatHeader(State.currentChat);
   });
 
-  /* ترحيل الرسائل القديمة مرة واحدة (إن وُجدت) */
   Store.migrateLegacy();
 
   /* مستمع مستقل لكل محادثة */
@@ -216,6 +287,16 @@ function enterInbox() {
   });
 }
 
+/* زر التحديث: يعيد جلب أحدث الرسائل (بدون تسجيل دخول أو كلمة سر) */
+function refreshData(btn) {
+  if (!State.user) return;
+  Store.reconnect();
+  startListeners();
+  if (State.currentChat) $('#messages').innerHTML = '';
+  if (btn) { btn.classList.remove('spin-once'); void btn.offsetWidth; btn.classList.add('spin-once'); }
+  toast('🔄 تم تحديث الشات ✔');
+}
+
 function initInbox() {
   const me = State.user;
   $('#inbox-my-name').textContent = USERS[me].name;
@@ -227,7 +308,7 @@ function initInbox() {
   State.inboxBound = true;
   $('#btn-inbox-settings').addEventListener('click', () => openSettings());
   $('#inbox-my-info').addEventListener('click', () => openSettings());
-  $('#btn-inbox-refresh').addEventListener('click', () => location.reload());
+  $('#btn-inbox-refresh').addEventListener('click', e => refreshData(e.currentTarget));
 }
 
 function updateMyHeaderFromUsers() {
@@ -236,11 +317,13 @@ function updateMyHeaderFromUsers() {
   if (u.name) $('#inbox-my-name').textContent = u.name;
   if (u.note) $('#inbox-my-note').textContent = u.note;
   else $('#inbox-my-note').textContent = 'متصل الآن';
+  State.note = u.note || '';
   if (u.avatar) $('#inbox-my-avatar').innerHTML = `<img src="${u.avatar}">`;
 }
 
 function renderInbox() {
   const me = State.user;
+  if (!me) return;
   const others = Object.keys(USERS).filter(u => u !== me);
   const list = $('#inbox-list');
   list.innerHTML = '';
@@ -250,9 +333,14 @@ function renderInbox() {
     const info = USERS[uid];
     const msgs = State.messages[uid] || [];
     const last = msgs[msgs.length - 1];
+    const unread = msgs.filter(m => m.to === me && !m.seen).length;
+    let tick = '';
+    if (last && last.from === me) {
+      tick = last.seen ? '<span class="tick seen">👁</span> ' : (last.delivered ? '<span class="tick">✓</span> ' : '');
+    }
 
     const el = document.createElement('div');
-    el.className = 'inbox-item' + (isOnline(u.lastSeen) ? ' online' : '');
+    el.className = 'inbox-item' + (isOnline(u.lastSeen) ? ' online' : '') + (unread ? ' has-unread' : '');
     el.innerHTML = `
       <div class="inbox-item-avatar" style="${u.avatar ? '' : 'background:' + AVATAR_COLORS[uid]}">
         ${u.avatar ? `<img src="${u.avatar}">` : info.name[0]}
@@ -261,10 +349,11 @@ function renderInbox() {
       <div class="inbox-item-body">
         <div class="inbox-item-name">${escapeHtml(u.name || info.name)}</div>
         ${u.note ? `<div class="inbox-item-note">💭 ${escapeHtml(u.note)}</div>` : ''}
-        <div class="inbox-item-last">${last ? previewMsg(last) : 'ابدأ المحادثة...'}</div>
+        <div class="inbox-item-last">${unread ? '✉️ ' : tick}${last ? previewMsg(last) : 'ابدأ المحادثة...'}</div>
       </div>
       <div class="inbox-item-meta">
         <span class="inbox-item-time">${last ? formatTime(last.timestamp) : ''}</span>
+        ${unread ? `<span class="inbox-item-unread">${unread}</span>` : ''}
       </div>
     `;
     el.addEventListener('click', () => openChat(uid));
@@ -288,9 +377,12 @@ function openChat(uid) {
   State.currentChat = uid;
   goTo('screen-chat');
   $('#messages').innerHTML = '';
+  closeSearch();
+  $('#chat-menu').classList.remove('open');
   (State.messages[uid] || []).forEach(m => renderMessage(m, m._id));
   updateChatHeader(uid);
   scrollToBottom();
+  markAllSeen(uid);
 }
 
 function updateChatHeader(uid) {
@@ -299,15 +391,9 @@ function updateChatHeader(uid) {
   $('#hdr-name').textContent = u.name || info.name;
   if (u.avatar) $('#hdr-avatar').innerHTML = `<img src="${u.avatar}">`;
   else { $('#hdr-avatar').innerHTML = ''; $('#hdr-avatar').textContent = info.name[0]; }
-  if (u.note) {
-    let n = $('#hdr-note');
-    if (!n) {
-      n = document.createElement('span');
-      n.id = 'hdr-note'; n.className = 'hdr-note';
-      $('.header-info').appendChild(n);
-    }
-    n.textContent = '💭 ' + u.note;
-  } else { const n = $('#hdr-note'); if (n) n.textContent = ''; }
+  const n = $('#hdr-note');                       // الملاحظة تظهر تحت الاسم مثل واتساب
+  n.textContent = u.note ? '💭 ' + u.note : '';
+  n.style.display = u.note ? 'block' : 'none';
   updateLastSeenUI(u.lastSeen);
 }
 
@@ -361,6 +447,39 @@ const THEME_COLORS = [
   { id:'7', v:'#ff2d9e' }, { id:'8', v:'#2dffd9' }
 ];
 
+function hexToRgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}, ${a})`;
+}
+
+/* يضبط ألوان الموقع كلها على <body> (لأن سمة المستخدم معرّفة هناك وتتغلّب على :root) */
+function applyThemeColor(hex) {
+  const st = document.body.style;
+  st.setProperty('--accent', hex);
+  st.setProperty('--edge', `color-mix(in srgb, ${hex} 50%, #000)`);
+  st.setProperty('--edge-glow', hexToRgba(hex, .5));
+  st.setProperty('--bubble-me', `color-mix(in srgb, ${hex} 16%, #050505)`);
+  st.setProperty('--bubble-me-border', hex);
+  st.setProperty('--bubble-other', `color-mix(in srgb, ${hex} 7%, #060606)`);
+  st.setProperty('--bubble-other-border', `color-mix(in srgb, ${hex} 42%, #000)`);
+  st.setProperty('--bg-1', `color-mix(in srgb, ${hex} 4%, #030303)`);
+  st.setProperty('--bg-2', `color-mix(in srgb, ${hex} 11%, #050505)`);
+  st.setProperty('--ov1', `color-mix(in srgb, ${hex} 11%, rgba(5,5,5,.86))`);
+  st.setProperty('--ov2', `color-mix(in srgb, ${hex} 16%, rgba(5,5,5,.94))`);
+}
+
+/* موجة لونية تنتشر من نقطة الضغط */
+function colorWave(x, y, hex) {
+  ['', ' ring'].forEach(extra => {
+    const w = document.createElement('div');
+    w.className = 'color-wave' + extra;
+    w.style.left = x + 'px'; w.style.top = y + 'px';
+    if (!extra) w.style.background = `radial-gradient(circle, ${hex} 0%, ${hex}00 70%)`;
+    document.body.appendChild(w);
+    setTimeout(() => w.remove(), 1200);
+  });
+}
+
 function buildPalette() {
   const wrap = $('#palette-colors');
   if (!wrap) return;
@@ -372,7 +491,9 @@ function buildPalette() {
     s.dataset.id = c.id;
     s.addEventListener('click', () => {
       State.themeColor = c.id;
-      document.documentElement.style.setProperty('--accent', c.v);
+      applyThemeColor(c.v);
+      const r = s.getBoundingClientRect();
+      colorWave(r.left + r.width / 2, r.top + r.height / 2, c.v);
       $$('.palette-colors .swatch').forEach(x => x.classList.toggle('active', x.dataset.id === c.id));
       localStorage.setItem('themeColor_' + State.user, c.id);
       toast('تم تغيير اللون ✔');
@@ -480,7 +601,8 @@ $('#btn-save-profile').addEventListener('click', () => {
   const name = $('#name-input').value.trim() || USERS[State.user].name;
   const avatar = $('#pc-avatar').querySelector('img')?.src || '';
   Store.saveUser(State.user, { name, avatar });
-  localStorage.setItem('profile_' + State.user, JSON.stringify({ name, avatar }));
+  const prev = JSON.parse(localStorage.getItem('profile_' + State.user) || '{}');
+  localStorage.setItem('profile_' + State.user, JSON.stringify({ ...prev, name, avatar }));
   toast('تم الحفظ ✔');
   $('#profile-card').classList.remove('open');
 });
@@ -502,8 +624,9 @@ function renderMessage(msg, id) {
 
   const avatar = document.createElement('div');
   avatar.className = 'msg-avatar';
-  if (msg.avatar) avatar.innerHTML = `<img src="${msg.avatar}">`;
-  else avatar.textContent = (msg.fromName || '?')[0];
+  const liveAv = (State.others[msg.from] || {}).avatar || msg.avatar;
+  if (liveAv) avatar.innerHTML = `<img src="${liveAv}">`;
+  else avatar.textContent = (msg.fromName || USERS[msg.from]?.name || '?')[0];
   row.appendChild(avatar);
 
   const bubble = document.createElement('div');
@@ -517,32 +640,27 @@ function renderMessage(msg, id) {
     bubble.appendChild(r);
   }
 
-  if (msg.note) {
-    const nt = document.createElement('span');
-    nt.className = 'msg-note';
-    nt.textContent = '💭 ' + msg.note;
-    bubble.appendChild(nt);
-  }
-
   const content = document.createElement('div');
   content.className = 'msg-content';
 
   if (msg.type === 'image') {
     const img = document.createElement('img');
     img.src = msg.url; img.className = 'msg-image';
-    img.addEventListener('click', () => openViewer('image', msg.url));
+    img.addEventListener('click', () => openViewer('image', msg.url, msg.fileName));
     content.appendChild(img);
+    content.appendChild(makeDlBtn(msg));
   } else if (msg.type === 'audio') {
     const wrap = document.createElement('div');
     wrap.className = 'msg-audio';
     wrap.innerHTML = `<span>🎵</span><audio controls src="${msg.url}"></audio>`;
     content.appendChild(wrap);
+    content.appendChild(makeDlBtn(msg));
   } else if (msg.type === 'file') {
     const wrap = document.createElement('div');
     wrap.className = 'msg-file';
     wrap.innerHTML = `<span class="f-ico">📄</span>
-      <div><div class="f-name">${escapeHtml(msg.fileName || 'ملف')}</div>
-      <a href="${msg.url}" download class="btn small" style="padding:4px 10px;font-size:11px;">تحميل</a></div>`;
+      <div><div class="f-name">${escapeHtml(msg.fileName || 'ملف')}</div></div>`;
+    wrap.lastElementChild.appendChild(makeDlBtn(msg));
     content.appendChild(wrap);
   } else {
     content.innerHTML = parseColorCodes(msg.text || '');
@@ -557,6 +675,13 @@ function renderMessage(msg, id) {
     ed.className = 'msg-edited';
     ed.textContent = 'تم التعديل';
     time.appendChild(ed);
+  }
+  if (isMe) {                                   // وصلت ✓ / تمت المشاهدة 👁
+    const st = document.createElement('span');
+    st.className = 'msg-status' + (msg.seen ? ' seen' : '');
+    st.innerHTML = msg.seen ? '<span class="eye">👁</span> تمت المشاهدة'
+                 : msg.delivered ? '✓ وصلت' : '🕓 أُرسلت';
+    time.appendChild(st);
   }
   bubble.appendChild(time);
 
@@ -789,8 +914,6 @@ function sendTo(chat, extra) {
     to: chat,
     chatId: Store.chatIdOf(me, chat),
     fromName: $('#name-input').value || USERS[me].name,
-    avatar: $('#pc-avatar').querySelector('img')?.src || '',
-    note: State.note,
     ...extra
   };
   return Store.sendMessage(msg.chatId, msg).then(ok => {
@@ -828,10 +951,45 @@ function sendTextMessage() {
 }
 
 function downloadReply(r) {
-  if (!r.url) { toast('لا يوجد ملف للتحميل'); return; }
-  const a = document.createElement('a');
-  a.href = r.url; a.download = r.fileName || 'download'; a.click();
-  toast('جاري التحميل...');
+  downloadMedia(r.url, r.fileName, r.type);
+}
+
+/* ---------- التنزيل الحقيقي للملفات ---------- */
+const MIME_EXT = { 'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif',
+  'audio/webm':'webm','audio/mpeg':'mp3','audio/ogg':'ogg','audio/wav':'wav','audio/mp4':'m4a',
+  'video/mp4':'mp4','application/pdf':'pdf','text/plain':'txt' };
+
+function fileNameWithExt(name, mime, type) {
+  name = (name || 'file').trim();
+  if (/\.[A-Za-z0-9]{2,5}$/.test(name)) return name;
+  const ext = MIME_EXT[(mime || '').split(';')[0]] || (type === 'image' ? 'jpg' : type === 'audio' ? 'webm' : '');
+  return ext ? name + '.' + ext : name;
+}
+
+async function downloadMedia(url, name, type) {
+  if (!url) { toast('لا يوجد ملف للتنزيل'); return; }
+  toast('⬇ جاري التنزيل...');
+  try {
+    const blob = await (await fetch(url)).blob();
+    const obj = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = obj; a.download = fileNameWithExt(name, blob.type, type);
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(obj), 4000);
+    toast('تم التنزيل ✔');
+  } catch (err) {                                  // احتياطي (مثلاً قيود CORS)
+    const a = document.createElement('a');
+    a.href = url; a.download = fileNameWithExt(name, '', type); a.target = '_blank'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+}
+
+function makeDlBtn(msg) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'msg-dl';
+  b.innerHTML = '⬇ تنزيل';
+  b.addEventListener('click', e => { e.stopPropagation(); downloadMedia(msg.url, msg.fileName, msg.type); });
+  return b;
 }
 
 /* ============================================================
@@ -1129,11 +1287,11 @@ function cleanupRecording() {
 /* ============================================================
    17) العارض والتوست
    ============================================================ */
-function openViewer(type, url) {
+function openViewer(type, url, fname) {
   const body = $('#viewer-body');
   body.innerHTML = type === 'image' ? `<img src="${url}">` : `<video src="${url}" controls></video>`;
   $('#viewer-download').onclick = () => {
-    const a = document.createElement('a'); a.href = url; a.download = 'media'; a.click();
+    downloadMedia(url, fname || 'media', type);
   };
   $('#viewer').classList.add('open');
 }
@@ -1158,6 +1316,8 @@ function goTo(id) {
 
 $('#btn-back').addEventListener('click', () => {
   State.currentChat = null;
+  closeSearch();
+  $('#chat-menu').classList.remove('open');
   $('#messages').innerHTML = '';
   goTo('screen-inbox');
 });
@@ -1183,7 +1343,7 @@ $('#btn-back').addEventListener('click', () => {
   }
   function loop() {
     ctx.clearRect(0,0,W,H);
-    const col = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#fff';
+    const col = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#fff';
     parts.forEach(p => {
       p.x += p.vx; p.y += p.vy;
       if (p.x<0||p.x>W) p.vx *= -1;
@@ -1204,5 +1364,188 @@ $('#btn-back').addEventListener('click', () => {
 window.addEventListener('beforeunload', e => {
   if (State.recording) { e.preventDefault(); e.returnValue = ''; }
 });
+
+/* ============================================================
+   20) قائمة ⋮ : بحث / تحديث / مسح الشات
+   ============================================================ */
+$('#btn-more').addEventListener('click', e => {
+  e.stopPropagation();
+  $('#palette-bar').classList.remove('open');
+  $('#settings-panel').classList.remove('open');
+  $('#profile-card').classList.remove('open');
+  $('#chat-menu').classList.toggle('open');
+});
+document.addEventListener('click', e => {           // مرحلة الالتقاط: تعمل حتى مع stopPropagation
+  if (!e.target.closest('#chat-menu, #btn-more')) $('#chat-menu').classList.remove('open');
+}, true);
+
+$$('#chat-menu .menu-item').forEach(b => b.addEventListener('click', e => {
+  e.stopPropagation();
+  $('#chat-menu').classList.remove('open');
+  const act = b.dataset.act;
+  if (act === 'search') openSearch();
+  else if (act === 'refresh') refreshData($('#btn-more'));
+  else if (act === 'clear') clearCurrentChat();
+}));
+
+/* ---------- نافذة تأكيد ---------- */
+function askConfirm(title, text, okLabel) {
+  return new Promise(res => {
+    $('#cm-title').textContent = title;
+    $('#cm-text').textContent = text;
+    $('#cm-ok').textContent = okLabel || 'تأكيد';
+    const m = $('#confirm-modal');
+    m.classList.add('open');
+    const done = v => { m.classList.remove('open'); $('#cm-ok').onclick = null; $('#cm-cancel').onclick = null; res(v); };
+    $('#cm-ok').onclick = () => done(true);
+    $('#cm-cancel').onclick = () => done(false);
+  });
+}
+
+/* ---------- مسح الشات بالكامل ---------- */
+async function clearCurrentChat() {
+  const other = State.currentChat;
+  if (!other) return;
+  const nm = (State.others[other] || {}).name || USERS[other].name;
+  const ok = await askConfirm('🗑️ مسح الشات بالكامل',
+    `سيتم حذف جميع الرسائل بينك وبين ${nm} عند الطرفين، ولا يمكن التراجع.`, 'مسح الكل');
+  if (!ok) return;
+  const chatId = Store.chatIdOf(State.user, other);
+  const msgs = (State.messages[other] || []).slice();
+  try {
+    await Store.clearChat(chatId, msgs);
+    State.messages[other] = [];
+    setTimeout(() => { if (State.currentChat === other) $('#messages').innerHTML = ''; renderInbox(); }, 500);
+    toast('تم مسح الشات ✔');
+  } catch (err) { console.error(err); toast('تعذّر مسح الشات'); }
+}
+
+/* ============================================================
+   21) البحث داخل الشات
+   ============================================================ */
+/* تطبيع عربي: يتجاهل التشكيل والتطويل ويوحّد الألف والياء والتاء المربوطة */
+function normMap(str) {
+  let out = ''; const map = [];
+  for (let i = 0; i < str.length; i++) {
+    let ch = str[i];
+    if (/[\u064B-\u065F\u0670\u0640]/.test(ch)) continue;
+    ch = ch.toLowerCase().replace(/[أإآ]/, 'ا').replace('ى', 'ي').replace('ة', 'ه');
+    out += ch; map.push(i);
+  }
+  return { out, map };
+}
+function highlight(text, q) {
+  const { out, map } = normMap(text);
+  let html = '', last = 0, from = 0, pos;
+  while ((pos = out.indexOf(q, from)) !== -1) {
+    const a = map[pos], b = map[pos + q.length - 1] + 1;
+    html += escapeHtml(text.slice(last, a)) + '<mark>' + escapeHtml(text.slice(a, b)) + '</mark>';
+    last = b; from = pos + q.length;
+  }
+  return html + escapeHtml(text.slice(last));
+}
+
+function openSearch() {
+  if (!State.currentChat) return;
+  $('#search-bar').classList.add('open');
+  $('#search-input').value = '';
+  $('#search-results').innerHTML = '<div class="search-empty">اكتب كلمة أو جزءاً منها للبحث 🔍</div>';
+  setTimeout(() => $('#search-input').focus(), 50);
+}
+function closeSearch() {
+  const bar = $('#search-bar');
+  if (!bar) return;
+  bar.classList.remove('open');
+  $('#search-input').value = '';
+  $('#search-results').innerHTML = '';
+}
+$('#search-close').addEventListener('click', closeSearch);
+$('#search-input').addEventListener('input', runSearch);
+
+function runSearch() {
+  const box = $('#search-results');
+  const raw = $('#search-input').value.trim();
+  if (!raw) { box.innerHTML = '<div class="search-empty">اكتب كلمة أو جزءاً منها للبحث 🔍</div>'; return; }
+  const q = normMap(raw).out;
+  const other = State.currentChat;
+  const found = [];
+  (State.messages[other] || []).slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).forEach(m => {
+    if (m.blur && !m.revealed && m.from !== State.user) return;       // لا نكشف الرسائل المغبشة
+    const txt = (!m.type || m.type === 'text') ? (m.text || '') : (m.fileName || '');
+    if (!txt) return;
+    const pos = normMap(txt).out.indexOf(q);
+    if (pos !== -1) found.push({ m, txt });
+  });
+  box.innerHTML = '';
+  if (!found.length) { box.innerHTML = '<div class="search-empty">لا توجد نتائج 🙁</div>'; return; }
+  found.slice(0, 50).forEach(({ m, txt }) => {
+    const { out, map } = normMap(txt);
+    const p = map[out.indexOf(q)] || 0;
+    const a = Math.max(0, p - 25), b = Math.min(txt.length, p + raw.length + 60);
+    const snippet = (a > 0 ? '…' : '') + txt.slice(a, b) + (b < txt.length ? '…' : '');
+    const d = new Date(m.timestamp || Date.now());
+    const el = document.createElement('div');
+    el.className = 'search-item';
+    el.innerHTML = `<div class="si-head"><b>${m.from === State.user ? 'أنت' : escapeHtml(m.fromName || USERS[m.from].name)}</b>
+      <span>${d.toLocaleDateString('ar')} ${formatTime(m.timestamp)}</span></div>
+      <div class="si-text">${highlight(snippet, q)}</div>`;
+    el.addEventListener('click', () => {
+      closeSearch();
+      const row = findRow(m._id);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash');
+        setTimeout(() => row.classList.remove('flash'), 1800);
+      }
+    });
+    box.appendChild(el);
+  });
+}
+
+/* ============================================================
+   22) زر تهكير 💀 (فخ) + تبديل الحساب
+   ============================================================ */
+$('#btn-hack').addEventListener('click', e => {
+  e.stopPropagation();
+  const ov = $('#hack-overlay');
+  if (ov.classList.contains('show')) return;
+  ov.classList.add('show');
+  if (navigator.vibrate) navigator.vibrate([120, 60, 200]);
+  setTimeout(() => { logout(); ov.classList.remove('show'); }, 2600);
+});
+$('#set-logout').addEventListener('click', logout);
+
+/* ============================================================
+   23) تأثير الموجة عند الضغط على أي زر
+   ============================================================ */
+document.addEventListener('pointerdown', e => {
+  const t = e.target.closest('.btn, .icon-btn, .opt-btn, .inbox-item, .hack-btn, .menu-item, .search-item');
+  if (!t) return;
+  const r = t.getBoundingClientRect();
+  const size = Math.max(r.width, r.height) * 2;
+  const sp = document.createElement('span');
+  sp.className = 'ripple';
+  sp.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px`;
+  t.appendChild(sp);
+  setTimeout(() => sp.remove(), 700);
+});
+
+/* ============================================================
+   24) الإقلاع: الجلسة المحفوظة → "جار التحميل" → الحساب مباشرة
+   ============================================================ */
+(function boot() {
+  let sess = null;
+  try { sess = JSON.parse(localStorage.getItem('session_v1') || 'null'); } catch (e) {}
+  if (sess && USERS[sess.user]) {
+    document.body.dataset.theme = sess.user;
+    const sc = localStorage.getItem('themeColor_' + sess.user);
+    const c = THEME_COLORS.find(x => x.id === sc);
+    if (c) applyThemeColor(c.v);
+    goTo('screen-loading');
+    setTimeout(() => startSession(sess.user), 1400);
+  } else {
+    goTo('screen-password');
+  }
+})();
 
 console.log('%c✅ app.js — الإصدار النهائي جاهز', 'color:#10b981;font-weight:bold;font-size:14px');

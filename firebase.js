@@ -223,6 +223,32 @@ const Store = {
     return true;
   },
 
+  /* ---------- هل الموقع متصل بـ Firebase فعلاً؟ ---------- */
+  isOnline() { return fbReady; },
+
+  /* ---------- إعادة الاتصال (لزر التحديث) ---------- */
+  reconnect() {
+    if (fbReady) { try { fbDB.goOffline(); fbDB.goOnline(); } catch (e) {} }
+  },
+
+  /* ---------- مسح الشات بالكامل (عند الطرفين) ---------- */
+  async clearChat(chatId, msgs) {
+    if (fbReady) {
+      await fbDB.ref('chats/' + chatId + '/messages').remove();
+      /* حذف المرفقات من التخزين (اختياري) */
+      try {
+        for (const m of (msgs || [])) {
+          if (m && m.url && /^https?:/.test(m.url) && fbStorage) {
+            fbStorage.refFromURL(m.url).delete().catch(() => {});
+          }
+        }
+      } catch (e) { /* تجاهل */ }
+      return true;
+    }
+    lsWriteMsgs(lsReadMsgs().filter(x => x.chatId !== chatId));
+    return true;
+  },
+
   /* ---------- ترحيل الرسائل القديمة (مرة واحدة) ----------
      القديم: messages/{id}  ← الجديد: chats/{chatId}/messages/{id}  */
   async migrateLegacy() {
