@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#000">
+<title>همزة & رواحة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="hamza" data-color="1">
+
+<!-- طبقات الخلفية 3D -->
+<div class="bg-3d">
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+  <div class="orb orb-c"></div>
+  <div class="grid-floor"></div>
+  <canvas id="particles"></canvas>
+</div>
+
+<!-- ============ شاشة 1: كلمة السر ============ -->
+<section id="screen-password" class="screen active">
+  <div class="glass-panel">
+    <div class="lock-3d">🔒</div>
+    <h1 class="screen-title">مرحباً بك</h1>
+    <p class="screen-sub">أدخل كلمة السر للمتابعة</p>
+    <div class="input-wrap">
+      <input id="password-input" type="password" inputmode="numeric" maxlength="8"
+             placeholder="• • • •" autocomplete="off">
+      <span class="input-glow"></span>
+    </div>
+    <button id="btn-password" class="btn btn-primary">دخول</button>
+    <p id="password-error" class="error-msg"></p>
+  </div>
+</section>
+
+<!-- ============ شاشة 2: الأذونات ============ -->
+<section id="screen-permissions" class="screen">
+  <div class="glass-panel">
+    <div class="bell-3d" id="bell-3d">🔔</div>
+    <h1 class="screen-title">الأذونات مطلوبة</h1>
+    <p class="screen-sub">اضغط الجرس لمنح الموقع الأذونات اللازمة</p>
+    <div class="perm-list" id="perm-list">
+      <div class="perm-item" data-perm="notifications">
+        <span class="perm-ico">🔔</span><span>الإشعارات</span>
+        <span class="perm-status">بانتظار</span>
+      </div>
+      <div class="perm-item" data-perm="microphone">
+        <span class="perm-ico">🎤</span><span>الميكروفون</span>
+        <span class="perm-status">بانتظار</span>
+      </div>
+      <div class="perm-item" data-perm="camera">
+        <span class="perm-ico">📷</span><span>الكاميرا</span>
+        <span class="perm-status">بانتظار</span>
+      </div>
+      <div class="perm-item" data-perm="storage">
+        <span class="perm-ico">📁</span><span>الملفات والصور</span>
+        <span class="perm-status">بانتظار</span>
+      </div>
+    </div>
+    <button id="btn-request-perms" class="btn btn-bell">🔔 طلب جميع الأذونات</button>
+    <button id="btn-skip-perms" class="btn btn-ghost">تخطي</button>
+  </div>
+</section>
+
+<!-- ============ شاشة 3: من أنت ============ -->
+<section id="screen-identity" class="screen">
+  <div class="glass-panel">
+    <h1 class="screen-title">من أنت؟</h1>
+    <p class="screen-sub">اختر ملفك الشخصي للدخول</p>
+    <div class="identity-buttons">
+      <button class="identity-btn identity-hamza" data-user="hamza">
+        <div class="id-avatar">ح</div>
+        <div class="id-info">
+          <span class="id-name">حمزة</span>
+          <span class="id-tag">J.C</span>
+        </div>
+      </button>
+      <button class="identity-btn identity-rawaha" data-user="rawaha">
+        <div class="id-avatar">ر</div>
+        <div class="id-info">
+          <span class="id-name">رواحة</span>
+          <span class="id-tag">Itachi</span>
+        </div>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ شاشة 4: الشات ============ -->
+<section id="screen-chat" class="screen">
+
+  <!-- الهيدر -->
+  <header class="chat-header">
+    <button id="btn-back" class="icon-btn" title="خروج">←</button>
+    <div class="header-profile" id="open-profile">
+      <div class="header-avatar" id="hdr-avatar">?</div>
+      <div class="header-info">
+        <span class="hdr-name" id="hdr-name">...</span>
+        <span class="hdr-status" id="hdr-status">غير متصل</span>
+      </div>
+    </div>
+    <button id="btn-palette" class="icon-btn" title="الألوان">🎨</button>
+  </header>
+
+  <!-- شريط الألوان الـ8 -->
+  <div class="palette-bar" id="palette-bar">
+    <div class="palette-colors" id="palette-colors"></div>
+    <button id="btn-palette-close" class="icon-btn small">✕</button>
+  </div>
+
+  <!-- بطاقة البروفايل الكبيرة -->
+  <div class="profile-card" id="profile-card">
+    <div class="pc-avatar" id="pc-avatar">?</div>
+    <input type="file" id="avatar-upload" accept="image/*" hidden>
+    <button id="btn-upload-avatar" class="btn small">تغيير الصورة</button>
+    <input id="name-input" class="pc-name-input" maxlength="24" placeholder="اسمك المزخرف ✨">
+    <span class="pc-tag" id="pc-tag">—</span>
+    <button id="btn-save-profile" class="btn btn-primary small">حفظ</button>
+  </div>
+
+  <!-- منطقة الرسائل -->
+  <main class="messages" id="messages"></main>
+
+  <!-- معاينة الرد -->
+  <div class="reply-preview" id="reply-preview">
+    <div class="rp-bar"></div>
+    <div class="rp-body">
+      <span class="rp-name" id="rp-name"></span>
+      <span class="rp-text" id="rp-text"></span>
+    </div>
+    <button id="rp-cancel" class="icon-btn small">✕</button>
+  </div>
+
+  <!-- لوحة الخيارات (+) -->
+  <div class="options-panel" id="options-panel">
+    <button class="opt-btn" data-opt="studio">
+      <span class="opt-ico">🖼️</span><span>استوديو</span>
+    </button>
+    <button class="opt-btn" data-opt="music">
+      <span class="opt-ico">🎵</span><span>موسيقى</span>
+    </button>
+    <button class="opt-btn" data-opt="files">
+      <span class="opt-ico">📂</span><span>ملفات</span>
+    </button>
+    <button class="opt-btn" data-opt="blur">
+      <span class="opt-ico">🌫️</span><span>مغبشة</span>
+    </button>
+  </div>
+
+  <!-- لوحة التسجيل -->
+  <div class="record-panel" id="record-panel">
+    <div class="rec-wave"><span></span><span></span><span></span><span></span><span></span></div>
+    <span class="rec-time" id="rec-time">00:00</span>
+    <div class="rec-actions">
+      <button id="rec-cancel" class="rec-btn rec-cancel" title="إلغاء">✕</button>
+      <button id="rec-pause" class="rec-btn rec-pause" title="إيقاف مؤقت">■</button>
+      <button id="rec-draft" class="rec-btn rec-draft" title="مسودة">⏳</button>
+    </div>
+  </div>
+
+  <!-- إدخال الرسائل -->
+  <footer class="chat-input">
+    <button id="btn-plus" class="icon-btn plus" title="خيارات">+</button>
+    <button id="btn-emoji" class="icon-btn" title="إيموجي">😊</button>
+    <input type="file" id="file-input" hidden>
+    <input type="file" id="music-input" accept="audio/*" hidden>
+    <input type="file" id="doc-input" hidden>
+    <textarea id="msg-input" rows="1" placeholder="اكتب رسالة... (~1 نص ~ للتلوين)"></textarea>
+    <button id="btn-mic" class="icon-btn mic" title="تسجيل">🎤</button>
+    <button id="btn-send" class="icon-btn send" title="إرسال">➤</button>
+  </footer>
+
+  <!-- منتقي الإيموجي -->
+  <div class="emoji-picker" id="emoji-picker">
+    <div class="emoji-grid" id="emoji-grid"></div>
+  </div>
+
+  <!-- شريط تفاعلات الرسالة -->
+  <div class="reactions-bar" id="reactions-bar">
+    <span data-r="❤️">❤️</span>
+    <span data-r="😂">😂</span>
+    <span data-r="😮">😮</span>
+    <span data-r="😢">😢</span>
+    <span data-r="👍">👍</span>
+    <span data-r="🔥">🔥</span>
+    <span data-r="🥰">🥰</span>
+    <span data-r="😡">😡</span>
+  </div>
+
+  <!-- عارض الصور/الفيديو -->
+  <div class="viewer" id="viewer">
+    <button id="viewer-close" class="icon-btn">✕</button>
+    <div class="viewer-body" id="viewer-body"></div>
+    <button id="viewer-download" class="btn small">تحميل ⬇</button>
+  </div>
+
+  <!-- مشغل الصوت -->
+  <div class="audio-player" id="audio-player">
+    <span class="ap-ico">🎵</span>
+    <div class="ap-info">
+      <span id="ap-title">مقطع صوتي</span>
+      <audio id="ap-audio" controls></audio>
+    </div>
+    <button id="ap-download" class="icon-btn small">⬇</button>
+    <button id="ap-close" class="icon-btn small">✕</button>
+  </div>
+
+  <!-- توست -->
+  <div class="toast" id="toast"></div>
+
+</section>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+<script src="firebase.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
