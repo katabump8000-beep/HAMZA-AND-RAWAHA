@@ -924,6 +924,75 @@ body[data-theme="rawaha"] .chat-input { position:relative; z-index:1; }
 .tc7{color:var(--c7)} .tc8{color:var(--c8)} .tc9{color:#fff}
 .tc10{color:#000; text-shadow:0 0 4px #fff} .tc11{color:#d4af37} .tc12{color:#c0c0c0}
 
+
+/* ============================================================
+   تعديل / حذف الرسائل
+   ============================================================ */
+.msg-row.no-anim { animation:none; }
+
+/* شريط الأزرار (لرسائلي فقط) */
+.msg-actions {
+  position:absolute; top:-18px;
+  display:none; gap:6px;
+  padding:3px 6px;
+  background:rgba(0,0,0,.9);
+  border:1px solid var(--glass-border);
+  border-radius:14px;
+  z-index:5;
+  box-shadow:0 4px 14px rgba(0,0,0,.5);
+}
+.msg-row.me .msg-actions { right:8px; }
+.msg-bubble.show-actions .msg-actions { display:flex; animation:msgIn .18s ease; }
+.msg-act {
+  background:none; border:none; cursor:pointer;
+  font-size:15px; line-height:1; padding:4px 5px;
+  border-radius:8px;
+  transition:transform .15s, background .15s;
+}
+.msg-act:hover { background:rgba(255,255,255,.12); transform:scale(1.15); }
+.msg-act.del:hover { background:rgba(255,45,45,.25); }
+
+/* حقل التعديل داخل الفقاعة */
+.msg-bubble.editing { cursor:default; min-width:220px; }
+.msg-edit { display:flex; flex-direction:column; gap:6px; }
+.msg-edit-input {
+  width:100%; resize:none;
+  background:rgba(0,0,0,.35);
+  border:1.5px solid var(--accent);
+  border-radius:10px;
+  color:var(--text);
+  font:inherit; font-size:14px; line-height:1.5;
+  padding:6px 10px;
+  outline:none;
+  direction:rtl;
+}
+.msg-edit-btns { display:flex; gap:6px; justify-content:flex-start; }
+.msg-edit-btns button {
+  border:none; cursor:pointer;
+  font:inherit; font-size:12px;
+  padding:4px 12px; border-radius:10px;
+  color:#fff;
+}
+.msg-edit-ok { background:var(--accent); }
+.msg-edit-no { background:rgba(255,255,255,.14); }
+
+/* تلميح "تم التعديل" */
+.msg-edited {
+  margin-inline-start:6px;
+  font-style:italic; opacity:.8;
+}
+.msg-edited::before { content:'• '; }
+
+/* تأثير الحذف: تلاشٍ + تصغير + ضبابية خلال 400ms */
+.msg-row.deleting {
+  animation:none;
+  pointer-events:none;
+  transition:opacity .4s ease, transform .4s ease, filter .4s ease;
+  opacity:0;
+  transform:scale(.6);
+  filter:blur(8px);
+}
+
 /* ============================================================
    استجابة الشاشة الصغيرة
    ============================================================ */

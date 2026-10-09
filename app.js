@@ -24,7 +24,12 @@ const State = {
   pendingBlur: false,
   themeColor: '1',
   blocked: JSON.parse(localStorage.getItem('blocked') || '[]'),
-  note: ''
+  note: '',
+  unsubs: [],
+  usersUnsub: null,
+  lastSeenTimer: null,
+  recChat: null,
+  inboxBound: false
 };
 
 const PASSWORD = '67';
@@ -136,32 +141,78 @@ $$('.identity-btn').forEach(btn => {
 /* ============================================================
    4) قائمة المحادثات
    ============================================================ */
+function stopListeners() {
+  State.unsubs.forEach(fn => { try { fn(); } catch (e) {} });
+  State.unsubs = [];
+  if (State.usersUnsub) { try { State.usersUnsub(); } catch (e) {} State.usersUnsub = null; }
+  clearInterval(State.lastSeenTimer);
+  State.lastSeenTimer = null;
+}
+
+/* هل الرسالة تخص هذه المحادثة بالضبط (أنا ↔ الطرف الآخر)؟ */
+function belongsToChat(msg, me, other) {
+  return !!msg && (
+    (msg.from === me && msg.to === other) ||
+    (msg.from === other && msg.to === me)
+  );
+}
+
+function onChatMessage(kind, other, msg, id) {
+  const list = State.messages[other] || (State.messages[other] = []);
+  const idx = list.findIndex(m => m._id === id);
+
+  if (kind === 'removed') {
+    if (idx >= 0) list.splice(idx, 1);
+    if (State.currentChat === other) removeMessageRow(id);
+    renderInbox();
+    return;
+  }
+
+  if (!belongsToChat(msg, State.user, other)) return;   // لا تسريب بين المحادثات
+  if (State.blocked.includes(msg.from)) return;
+
+  const full = { ...msg, _id: id };
+  if (idx >= 0) list[idx] = full; else list.push(full);
+
+  if (State.currentChat === other) {
+    renderMessage(full, id);
+    if (kind === 'added') scrollToBottom();
+  }
+  renderInbox();
+}
+
 function enterInbox() {
   goTo('screen-inbox');
   initInbox();
   loadMyProfile();
-  Store.updateLastSeen(State.user);
-  setInterval(() => Store.updateLastSeen(State.user), 20000);
 
-  Store.listenUsers(users => {
+  /* تنظيف أي مستمعين/مؤقتات قديمة (مثلاً عند تبديل الهوية) */
+  stopListeners();
+  State.messages = {};
+  State.currentChat = null;
+
+  Store.updateLastSeen(State.user);
+  State.lastSeenTimer = setInterval(() => Store.updateLastSeen(State.user), 20000);
+
+  State.usersUnsub = Store.listenUsers(users => {
     State.others = users;
     renderInbox();
     updateMyHeaderFromUsers();
     if (State.currentChat) updateChatHeader(State.currentChat);
   });
 
-  Store.listenMessages((msg, id) => {
-    if (!msg || !msg.from) return;
-    if (State.blocked.includes(msg.from)) return;
-    const other = msg.from === State.user ? (msg.to || '') : msg.from;
-    if (!State.messages[other]) State.messages[other] = [];
-    State.messages[other].push({ ...msg, _id: id });
+  /* ترحيل الرسائل القديمة مرة واحدة (إن وُجدت) */
+  Store.migrateLegacy();
 
-    if (State.currentChat === other) {
-      renderMessage(msg, id);
-      scrollToBottom();
-    }
-    renderInbox();
+  /* مستمع مستقل لكل محادثة */
+  Object.keys(USERS).filter(u => u !== State.user).forEach(other => {
+    const chatId = Store.chatIdOf(State.user, other);
+    const unsub = Store.listenChat(chatId, {
+      added:   (msg, id) => onChatMessage('added',   other, msg, id),
+      changed: (msg, id) => onChatMessage('changed', other, msg, id),
+      removed: (msg, id) => onChatMessage('removed', other, msg, id)
+    });
+    State.unsubs.push(unsub);
   });
 }
 
@@ -172,6 +223,8 @@ function initInbox() {
   myAv.textContent = USERS[me].name[0];
   myAv.style.background = AVATAR_COLORS[me];
 
+  if (State.inboxBound) return;      // ربط الأزرار مرة واحدة فقط
+  State.inboxBound = true;
   $('#btn-inbox-settings').addEventListener('click', () => openSettings());
   $('#inbox-my-info').addEventListener('click', () => openSettings());
   $('#btn-inbox-refresh').addEventListener('click', () => location.reload());
@@ -235,7 +288,7 @@ function openChat(uid) {
   State.currentChat = uid;
   goTo('screen-chat');
   $('#messages').innerHTML = '';
-  (State.messages[uid] || []).forEach((m, i) => renderMessage(m, m._id || ('local_' + i)));
+  (State.messages[uid] || []).forEach(m => renderMessage(m, m._id));
   updateChatHeader(uid);
   scrollToBottom();
 }
@@ -437,8 +490,14 @@ $('#btn-save-profile').addEventListener('click', () => {
    ============================================================ */
 function renderMessage(msg, id) {
   const isMe = msg.from === State.user;
+  const existing = $$('#messages .msg-row').find(r => r.dataset.id === id);
+
+  /* إن كانت الرسالة قيد التعديل الآن، نؤجل إعادة الرسم */
+  if (existing && existing.dataset.editing) { existing._pending = { msg, id }; return; }
+  if (existing && existing.dataset.removing) return;
+
   const row = document.createElement('div');
-  row.className = 'msg-row ' + (isMe ? 'me' : 'other');
+  row.className = 'msg-row ' + (isMe ? 'me' : 'other') + (existing ? ' no-anim' : '');
   row.dataset.id = id;
 
   const avatar = document.createElement('div');
@@ -493,35 +552,198 @@ function renderMessage(msg, id) {
   const time = document.createElement('span');
   time.className = 'msg-time';
   time.textContent = formatTime(msg.timestamp);
+  if (msg.edited) {
+    const ed = document.createElement('span');
+    ed.className = 'msg-edited';
+    ed.textContent = 'تم التعديل';
+    time.appendChild(ed);
+  }
   bubble.appendChild(time);
 
   if (msg.reactions && Object.keys(msg.reactions).length) {
     const rx = document.createElement('div');
     rx.className = 'msg-reactions';
     rx.innerHTML = Object.entries(msg.reactions)
-      .map(([emo, users]) => `<span>${emo} ${users.length}</span>`).join('');
+      .map(([emo, users]) => `<span>${emo} ${Object.keys(users || {}).length}</span>`).join('');
     bubble.appendChild(rx);
   }
 
-  bubble.addEventListener('click', () => {
+  /* أزرار التعديل والحذف — لرسائلي فقط */
+  if (isMe) {
+    const bar = document.createElement('div');
+    bar.className = 'msg-actions';
+    if (msg.type === 'text' || !msg.type) {
+      const eb = document.createElement('button');
+      eb.type = 'button'; eb.className = 'msg-act edit'; eb.title = 'تعديل الرسالة';
+      eb.textContent = '✏️';
+      eb.addEventListener('click', e => {
+        e.stopPropagation();
+        startEdit(msg, id, row, bubble, content);
+      });
+      bar.appendChild(eb);
+    }
+    const db = document.createElement('button');
+    db.type = 'button'; db.className = 'msg-act del'; db.title = 'حذف الرسالة';
+    db.textContent = '🗑️';
+    db.addEventListener('click', e => {
+      e.stopPropagation();
+      deleteOwnMessage(msg, id, row);
+    });
+    bar.appendChild(db);
+    bubble.appendChild(bar);
+  }
+
+  let longPressed = false;
+
+  bubble.addEventListener('click', e => {
+    if (longPressed) { longPressed = false; return; }
+    if (e.target.closest('.msg-actions, .msg-edit')) return;
+
     if (bubble.classList.contains('blurred') && !isMe) {
       bubble.classList.add('revealed');
       bubble.classList.remove('blurred');
-      Store.updateMessage(id, { revealed: true });
+      Store.updateMessage(Store.chatIdOf(msg.from, msg.to), id, { revealed: true });
+      return;
+    }
+    if (isMe && !bubble.classList.contains('editing')) {
+      /* الضغط على الوسائط/الروابط لا يفتح الأزرار */
+      if (e.target.closest('img, audio, a, button')) return;
+      const open = bubble.classList.contains('show-actions');
+      closeAllActions();
+      if (!open) bubble.classList.add('show-actions');
     }
   });
 
   let pressTimer = null;
   bubble.addEventListener('touchstart', () => {
-    pressTimer = setTimeout(() => openReactions(id, bubble), 500);
+    if (bubble.classList.contains('editing')) return;
+    pressTimer = setTimeout(() => {
+      longPressed = true;
+      openReactions(id, bubble);
+      if (isMe) { closeAllActions(); bubble.classList.add('show-actions'); }
+    }, 500);
   }, { passive:true });
   bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
-  bubble.addEventListener('contextmenu', e => { e.preventDefault(); openReactions(id, bubble); });
+  bubble.addEventListener('touchmove', () => clearTimeout(pressTimer), { passive:true });
+  bubble.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (bubble.classList.contains('editing')) return;
+    openReactions(id, bubble);
+    if (isMe) { closeAllActions(); bubble.classList.add('show-actions'); }
+  });
 
   attachSwipeToReply(bubble, msg);
 
   row.appendChild(bubble);
-  $('#messages').appendChild(row);
+  if (existing) existing.replaceWith(row);
+  else $('#messages').appendChild(row);
+}
+
+/* ---------- أزرار الرسالة: إغلاق / تعديل / حذف ---------- */
+function closeAllActions() {
+  $$('.msg-bubble.show-actions').forEach(b => b.classList.remove('show-actions'));
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.msg-bubble')) closeAllActions();
+});
+
+function findRow(id) {
+  return $$('#messages .msg-row').find(r => r.dataset.id === id);
+}
+
+/* تأثير الحذف: تلاشٍ + تصغير + ضبابية خلال 400ms ثم الإزالة من DOM */
+function animateRemove(row, done) {
+  if (!row || row.dataset.removing) return;
+  row.dataset.removing = '1';
+  row.classList.add('deleting');
+  setTimeout(() => { row.remove(); if (done) done(); }, 400);
+}
+
+function removeMessageRow(id) {
+  animateRemove(findRow(id));
+}
+
+async function deleteOwnMessage(msg, id, row) {
+  if (msg.from !== State.user) { toast('لا يمكنك حذف رسائل الطرف الآخر'); return; }
+  const bubble = row.querySelector('.msg-bubble');
+  if (bubble) bubble.classList.remove('show-actions');
+
+  animateRemove(row);   // الحذف دائماً مع التأثير، ويظهر عند الطرف الآخر أيضاً
+  try {
+    await Store.deleteMessage(Store.chatIdOf(msg.from, msg.to), id, msg);
+  } catch (err) {
+    console.error(err);
+    toast('تعذّر حذف الرسالة');
+    setTimeout(() => {
+      if (State.currentChat === msg.to) renderMessage(msg, id);
+    }, 450);
+  }
+}
+
+function startEdit(msg, id, row, bubble, content) {
+  if (msg.from !== State.user) { toast('لا يمكنك تعديل رسائل الطرف الآخر'); return; }
+  if (msg.type && msg.type !== 'text') { toast('يمكن تعديل الرسائل النصية فقط'); return; }
+  if (row.dataset.editing) return;
+
+  row.dataset.editing = '1';
+  bubble.classList.remove('show-actions');
+  bubble.classList.add('editing');
+
+  const box = document.createElement('div');
+  box.className = 'msg-edit';
+  const ta = document.createElement('textarea');
+  ta.className = 'msg-edit-input';
+  ta.value = msg.text || '';
+  ta.rows = 1;
+  const btns = document.createElement('div');
+  btns.className = 'msg-edit-btns';
+  const ok = document.createElement('button');
+  ok.type = 'button'; ok.className = 'msg-edit-ok'; ok.textContent = '✔ حفظ';
+  const no = document.createElement('button');
+  no.type = 'button'; no.className = 'msg-edit-no'; no.textContent = '✖ إلغاء';
+  btns.appendChild(ok); btns.appendChild(no);
+  box.appendChild(ta); box.appendChild(btns);
+
+  content.style.display = 'none';
+  content.after(box);
+
+  const autosize = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; };
+  autosize();
+  ta.addEventListener('input', autosize);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  const finish = (rerenderPending) => {
+    box.remove();
+    content.style.display = '';
+    bubble.classList.remove('editing');
+    delete row.dataset.editing;
+    const p = row._pending; row._pending = null;
+    if (rerenderPending && p) renderMessage(p.msg, p.id);
+  };
+
+  const save = async () => {
+    const t = ta.value.trim();
+    if (!t) { toast('لا يمكن أن تكون الرسالة فارغة'); return; }
+    if (t === (msg.text || '')) { finish(true); return; }
+    finish(false);
+    try {
+      await Store.updateMessage(Store.chatIdOf(msg.from, msg.to), id,
+        { text: t, edited: true, editedAt: Date.now() });
+      toast('تم تعديل الرسالة ✔');
+    } catch (err) {
+      console.error(err);
+      toast('تعذّر تعديل الرسالة');
+    }
+  };
+
+  ok.addEventListener('click', e => { e.stopPropagation(); save(); });
+  no.addEventListener('click', e => { e.stopPropagation(); finish(true); });
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(true); }
+  });
 }
 
 function escapeHtml(s) {
@@ -559,8 +781,27 @@ $('#msg-input').addEventListener('input', e => {
   e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
 });
 
+/* إرسال رسالة إلى محادثة محددة (الطرفان يُثبَّتان لحظة الاستدعاء) */
+function sendTo(chat, extra) {
+  const me = State.user;
+  const msg = {
+    from: me,
+    to: chat,
+    chatId: Store.chatIdOf(me, chat),
+    fromName: $('#name-input').value || USERS[me].name,
+    avatar: $('#pc-avatar').querySelector('img')?.src || '',
+    note: State.note,
+    ...extra
+  };
+  return Store.sendMessage(msg.chatId, msg).then(ok => {
+    if (!ok) toast('تعذّر إرسال الرسالة');
+    return ok;
+  });
+}
+
 function sendTextMessage() {
-  if (!State.currentChat) { toast('اختر محادثة أولاً'); return; }
+  const chat = State.currentChat;
+  if (!chat) { toast('اختر محادثة أولاً'); return; }
   const input = $('#msg-input');
   const text = input.value.trim();
   if (!text) return;
@@ -572,20 +813,14 @@ function sendTextMessage() {
     return;
   }
 
-  const msg = {
-    from: State.user,
-    to: State.currentChat,
-    fromName: $('#name-input').value || USERS[State.user].name,
-    avatar: $('#pc-avatar').querySelector('img')?.src || '',
-    note: State.note,
+  sendTo(chat, {
     type: 'text',
     text,
     blur: State.pendingBlur,
     revealed: false,
     replyTo: State.replyTo,
     reactions: {}
-  };
-  Store.sendMessage(msg);
+  });
   input.value = '';
   input.style.height = 'auto';
   clearReply();
@@ -655,19 +890,13 @@ $$('.opt-btn').forEach(b => {
 /* رفع الصور */
 $('#file-input').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f || !State.currentChat) return;
+  const chat = State.currentChat, reply = State.replyTo;   // تثبيت الطرف قبل الرفع
   toast('جاري رفع الصورة...');
   try {
     let url = await Store.uploadFile(f, p => toast(`رفع ${Math.round(p*100)}%`));
     if (!url) url = await fallbackBase64(f);
-    Store.sendMessage({
-      from: State.user, to: State.currentChat,
-      fromName: $('#name-input').value || USERS[State.user].name,
-      avatar: $('#pc-avatar').querySelector('img')?.src || '',
-      note: State.note,
-      type: 'image', url, fileName: f.name,
-      replyTo: State.replyTo, reactions: {}
-    });
-    clearReply();
+    sendTo(chat, { type: 'image', url, fileName: f.name, replyTo: reply, reactions: {} });
+    if (State.replyTo === reply) clearReply();
   } catch (err) { console.error(err); toast('فشل رفع الصورة'); }
   e.target.value = '';
 });
@@ -675,19 +904,13 @@ $('#file-input').addEventListener('change', async e => {
 /* رفع الصوت */
 $('#music-input').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f || !State.currentChat) return;
+  const chat = State.currentChat, reply = State.replyTo;   // تثبيت الطرف قبل الرفع
   toast('جاري رفع الصوت...');
   try {
     let url = await Store.uploadFile(f, p => toast(`رفع ${Math.round(p*100)}%`));
     if (!url) url = await fallbackBase64(f);
-    Store.sendMessage({
-      from: State.user, to: State.currentChat,
-      fromName: $('#name-input').value || USERS[State.user].name,
-      avatar: $('#pc-avatar').querySelector('img')?.src || '',
-      note: State.note,
-      type: 'audio', url, fileName: f.name,
-      replyTo: State.replyTo, reactions: {}
-    });
-    clearReply();
+    sendTo(chat, { type: 'audio', url, fileName: f.name, replyTo: reply, reactions: {} });
+    if (State.replyTo === reply) clearReply();
   } catch (err) { console.error(err); toast('فشل رفع الصوت'); }
   e.target.value = '';
 });
@@ -695,19 +918,13 @@ $('#music-input').addEventListener('change', async e => {
 /* رفع ملف */
 $('#doc-input').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f || !State.currentChat) return;
+  const chat = State.currentChat, reply = State.replyTo;   // تثبيت الطرف قبل الرفع
   toast('جاري رفع الملف...');
   try {
     let url = await Store.uploadFile(f, p => toast(`رفع ${Math.round(p*100)}%`));
     if (!url) url = await fallbackBase64(f);
-    Store.sendMessage({
-      from: State.user, to: State.currentChat,
-      fromName: $('#name-input').value || USERS[State.user].name,
-      avatar: $('#pc-avatar').querySelector('img')?.src || '',
-      note: State.note,
-      type: 'file', url, fileName: f.name,
-      replyTo: State.replyTo, reactions: {}
-    });
-    clearReply();
+    sendTo(chat, { type: 'file', url, fileName: f.name, replyTo: reply, reactions: {} });
+    if (State.replyTo === reply) clearReply();
   } catch (err) { console.error(err); toast('فشل رفع الملف'); }
   e.target.value = '';
 });
@@ -774,27 +991,11 @@ $$('#reactions-bar span').forEach(s => {
 });
 
 function addReaction(msgId, emo) {
-  if (typeof fbReady !== 'undefined' && fbReady) {
-    const ref = fbDB.ref(`messages/${msgId}/reactions/${emo}`);
-    ref.transaction(cur => {
-      cur = cur || [];
-      const i = cur.indexOf(State.user);
-      if (i >= 0) cur.splice(i,1);
-      else cur.push(State.user);
-      return cur;
-    });
-  } else {
-    const msgs = JSON.parse(localStorage.getItem('local_msgs') || '[]');
-    const i = parseInt(msgId.replace('local_', ''));
-    const m = msgs[i]; if (!m) return;
-    m.reactions = m.reactions || {};
-    m.reactions[emo] = m.reactions[emo] || [];
-    const k = m.reactions[emo].indexOf(State.user);
-    if (k >= 0) m.reactions[emo].splice(k,1);
-    else m.reactions[emo].push(State.user);
-    localStorage.setItem('local_msgs', JSON.stringify(msgs));
-    toast('تم التفاعل ' + emo);
-  }
+  if (!State.currentChat) return;
+  const chatId = Store.chatIdOf(State.user, State.currentChat);
+  Store.toggleReaction(chatId, msgId, emo, State.user)
+    .then(() => toast('تم التفاعل ' + emo))
+    .catch(() => toast('تعذّر إضافة التفاعل'));
 }
 
 document.addEventListener('click', e => {
@@ -820,6 +1021,7 @@ $('#rec-send').addEventListener('click', sendRecording);
 
 async function startRecording() {
   if (!State.currentChat) { toast('افتح محادثة أولاً'); return; }
+  State.recChat = State.currentChat;   // تثبيت الطرف عند بدء التسجيل
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
     State.mediaRecorder = new MediaRecorder(stream);
@@ -848,21 +1050,15 @@ async function startRecording() {
 }
 
 async function sendAudioBlob(blob) {
-  if (!State.currentChat) return;
+  const chat = State.recChat, reply = State.replyTo;
+  if (!chat) return;
   const f = new File([blob], 'voice_' + Date.now() + '.webm', { type:'audio/webm' });
   toast('جاري رفع التسجيل...');
   try {
     let url = await Store.uploadFile(f);
     if (!url) url = await fallbackBase64(f);
-    Store.sendMessage({
-      from: State.user, to: State.currentChat,
-      fromName: $('#name-input').value || USERS[State.user].name,
-      avatar: $('#pc-avatar').querySelector('img')?.src || '',
-      note: State.note,
-      type: 'audio', url, fileName: 'تسجيل صوتي',
-      replyTo: State.replyTo, reactions: {}
-    });
-    clearReply();
+    sendTo(chat, { type: 'audio', url, fileName: 'تسجيل صوتي', replyTo: reply, reactions: {} });
+    if (State.replyTo === reply) clearReply();
   } catch (err) { console.error(err); toast('فشل رفع التسجيل'); }
 }
 
