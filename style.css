@@ -1114,6 +1114,7 @@ body[data-theme="rawaha"] .chat-input { position:relative; z-index:1; }
 .hack-sub { font-size:16px; color:#bbb; letter-spacing:1px; }
 
 /* ---------- بانر الوضع المحلي ---------- */
+.mode-banner.ok { background:rgba(16,185,129,.14); border-color:rgba(16,185,129,.5); color:#6ee7b7; }
 .mode-banner {
   display:none; margin:10px 12px 0; padding:8px 12px; border-radius:12px;
   background:rgba(255,193,7,.12); border:1px solid rgba(255,193,7,.45);
