@@ -4,13 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#000">
-<title>همزة & رواحة</title>
+<title>Hamza & Rawaha</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-theme="hamza" data-color="1">
+<body>
 
 <!-- طبقات الخلفية 3D -->
 <div class="bg-3d">
@@ -62,7 +62,7 @@
       </div>
     </div>
     <button id="btn-request-perms" class="btn btn-bell">🔔 طلب جميع الأذونات</button>
-    <button id="btn-skip-perms" class="btn btn-ghost">تخطي</button>
+    <button id="btn-skip-perms" class="btn btn-ghost">تخطي ← الدخول مباشرة</button>
   </div>
 </section>
 
@@ -90,12 +90,33 @@
   </div>
 </section>
 
-<!-- ============ شاشة 4: الشات ============ -->
+<!-- ============ شاشة 4: قائمة المحادثات ============ -->
+<section id="screen-inbox" class="screen">
+  <div class="inbox-header">
+    <div class="inbox-my-info" id="inbox-my-info">
+      <div class="inbox-my-avatar" id="inbox-my-avatar">?</div>
+      <div class="inbox-my-text">
+        <span class="inbox-my-name" id="inbox-my-name">...</span>
+        <span class="inbox-my-note" id="inbox-my-note">متصل الآن</span>
+      </div>
+    </div>
+    <button id="btn-inbox-settings" class="icon-btn" title="الإعدادات">⚙️</button>
+  </div>
+
+  <h2 class="inbox-title">المحادثات</h2>
+  <div class="inbox-list" id="inbox-list"></div>
+
+  <div class="inbox-footer">
+    <button id="btn-inbox-refresh" class="btn btn-ghost small">🔄 تحديث</button>
+  </div>
+</section>
+
+<!-- ============ شاشة 5: الشات ============ -->
 <section id="screen-chat" class="screen">
 
   <!-- الهيدر -->
   <header class="chat-header">
-    <button id="btn-back" class="icon-btn" title="خروج">←</button>
+    <button id="btn-back" class="icon-btn" title="رجوع">←</button>
     <div class="header-profile" id="open-profile">
       <div class="header-avatar" id="hdr-avatar">?</div>
       <div class="header-info">
@@ -103,16 +124,31 @@
         <span class="hdr-status" id="hdr-status">غير متصل</span>
       </div>
     </div>
+    <button id="btn-settings" class="icon-btn" title="الإعدادات">⚙️</button>
     <button id="btn-palette" class="icon-btn" title="الألوان">🎨</button>
   </header>
 
-  <!-- شريط الألوان الـ8 -->
+  <!-- شريط الألوان -->
   <div class="palette-bar" id="palette-bar">
     <div class="palette-colors" id="palette-colors"></div>
     <button id="btn-palette-close" class="icon-btn small">✕</button>
   </div>
 
-  <!-- بطاقة البروفايل الكبيرة -->
+  <!-- لوحة الإعدادات -->
+  <div class="settings-panel" id="settings-panel">
+    <h3>⚙️ الإعدادات</h3>
+    <label>اسمك المزخرف</label>
+    <input id="set-name" maxlength="24" placeholder="اسمك...">
+    <label>ملاحظة تظهر تحت اسمك</label>
+    <input id="set-note" maxlength="60" placeholder="مثال: مشغول قليلاً 💭">
+    <label>صورة البروفايل</label>
+    <button id="set-avatar-btn" class="btn small">📷 تغيير الصورة</button>
+    <input type="file" id="set-avatar" accept="image/*" hidden>
+    <button id="set-save" class="btn btn-primary small">حفظ الإعدادات</button>
+    <button id="set-close" class="btn btn-ghost small">إغلاق</button>
+  </div>
+
+  <!-- بطاقة البروفايل -->
   <div class="profile-card" id="profile-card">
     <div class="pc-avatar" id="pc-avatar">?</div>
     <input type="file" id="avatar-upload" accept="image/*" hidden>
@@ -159,6 +195,7 @@
       <button id="rec-cancel" class="rec-btn rec-cancel" title="إلغاء">✕</button>
       <button id="rec-pause" class="rec-btn rec-pause" title="إيقاف مؤقت">■</button>
       <button id="rec-draft" class="rec-btn rec-draft" title="مسودة">⏳</button>
+      <button id="rec-send" class="rec-btn rec-send" title="إرسال">➤</button>
     </div>
   </div>
 
