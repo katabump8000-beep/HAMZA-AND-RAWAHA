@@ -31,17 +31,29 @@ const CHAT_USERS = ['hamza', 'rawaha'];
 let fbReady = false;
 let fbDB = null;
 let fbStorage = null;
+let fbError = '';
+let fbConnected = false;
 
 function initFirebase() {
   if (!FIREBASE_CONFIG.databaseURL) {
+    fbError = 'no-config';
     console.warn('[Firebase] لم يتم إعداد الاتصال — سيعمل الموقع محلياً');
+    return false;
+  }
+  if (typeof firebase === 'undefined') {
+    fbError = 'no-sdk';
+    console.error('[Firebase] المكتبة لم تُحمَّل (قد يكون الموقع محجوباً)');
     return false;
   }
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     fbDB = firebase.database();
-    fbStorage = firebase.storage();
+    try { fbStorage = firebase.storage(); } catch (e) { console.warn('[Firebase] Storage غير متاح'); }
     fbReady = true;
+    fbDB.ref('.info/connected').on('value', s => {
+      fbConnected = !!s.val();
+      window.dispatchEvent(new Event('fb-conn'));
+    });
     console.log('[Firebase] تم الاتصال بنجاح');
     return true;
   } catch (e) {
@@ -225,6 +237,7 @@ const Store = {
 
   /* ---------- هل الموقع متصل بـ Firebase فعلاً؟ ---------- */
   isOnline() { return fbReady; },
+  status() { return { ready: fbReady, error: fbError, connected: fbConnected }; },
 
   /* ---------- إعادة الاتصال (لزر التحديث) ---------- */
   reconnect() {
