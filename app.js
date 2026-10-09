@@ -252,11 +252,33 @@ function enterInbox() {
   initInbox();
   loadMyProfile();
   State.currentChat = null;
-  $('#mode-banner').style.display = Store.isOnline() ? 'none' : 'block';
+  updateModeBanner();
 
   Store.updateLastSeen(State.user);
   startListeners();
 }
+
+let bannerTimer = null;
+function updateModeBanner() {
+  const b = $('#mode-banner'); if (!b) return;
+  const st = Store.status();
+  clearTimeout(bannerTimer);
+  b.classList.remove('ok');
+  if (!st.ready) {
+    b.style.display = 'block';
+    b.textContent = st.error === 'no-sdk'
+      ? '⚠️ تعذّر تحميل مكتبة Firebase — تحقق من الإنترنت أو جرّب إيقاف/تشغيل VPN ثم أعد تحميل الصفحة'
+      : '⚠️ الوضع المحلي: الرسائل لن تصل لجهاز آخر — يلزم ملء إعدادات Firebase في firebase.js';
+  } else if (!st.connected) {
+    b.style.display = 'block';
+    b.textContent = '🟡 جاري الاتصال بالخادم...';
+  } else {
+    b.style.display = 'block'; b.classList.add('ok');
+    b.textContent = '🟢 متصل بالخادم';
+    bannerTimer = setTimeout(() => { b.style.display = 'none'; }, 3500);
+  }
+}
+window.addEventListener('fb-conn', () => { if (State.user) updateModeBanner(); });
 
 function startListeners() {
   /* تنظيف أي مستمعين/مؤقتات قديمة */
