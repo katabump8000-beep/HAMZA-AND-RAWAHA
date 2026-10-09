@@ -1,14 +1,12 @@
 /* ============================================================
-   app.js — منطق التطبيق الرئيسي
+   app.js — الإصدار الكامل المحدّث
    ============================================================ */
 
-/* ---------- مراجع سريعة ---------- */
 const $  = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
-/* ---------- الحالة ---------- */
 const State = {
-  user: null,           // 'hamza' أو 'rawaha'
+  user: null,
   myProfile: {},
   otherProfile: {},
   replyTo: null,
@@ -20,7 +18,9 @@ const State = {
   recTimer: null,
   currentReactionMsgId: null,
   pendingBlur: false,
-  themeColor: '1'
+  themeColor: '1',
+  blocked: JSON.parse(localStorage.getItem('blocked') || '[]'),
+  note: ''
 };
 
 const PASSWORD = '67';
@@ -30,7 +30,7 @@ const USERS = {
 };
 
 /* ============================================================
-   1) شاشة كلمة السر
+   1) كلمة السر
    ============================================================ */
 $('#btn-password').addEventListener('click', checkPassword);
 $('#password-input').addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
@@ -58,14 +58,12 @@ function shake(el) {
 }
 
 /* ============================================================
-   2) شاشة الأذونات
+   2) الأذونات
    ============================================================ */
 $('#bell-3d').addEventListener('click', requestAllPerms);
 $('#btn-request-perms').addEventListener('click', requestAllPerms);
 $('#btn-skip-perms').addEventListener('click', () => {
-  // العودة لشاشة كلمة السر
-  $('#password-input').value = '';
-  goTo('screen-password');
+  goTo('screen-identity');
 });
 
 async function requestAllPerms() {
@@ -81,7 +79,6 @@ async function requestAllPerms() {
 
   bell.classList.remove('ringing');
 
-  // سجّل النتائج
   const perms = ['notifications','microphone','camera','storage'];
   results.forEach((r, i) => {
     const el = $(`.perm-item[data-perm="${perms[i]}"]`);
@@ -96,14 +93,13 @@ async function requestAllPerms() {
     }
   });
 
-  // إذا كل الأذونات مقبولة → انتقل
   const allOk = results.every(r => r.status === 'fulfilled' && r.value);
   if (allOk) {
     $('#btn-request-perms').classList.add('done');
     $('#btn-request-perms').textContent = '✔ تم منح جميع الأذونات';
     setTimeout(() => goTo('screen-identity'), 700);
   } else {
-    toast('بعض الأذونات مرفوضة — اضغط تخطي أو أعد المحاولة');
+    toast('بعض الأذونات مرفوضة — اضغط تخطي للمتابعة');
   }
 }
 
@@ -113,37 +109,23 @@ async function requestNotifications() {
   const p = await Notification.requestPermission();
   return p === 'granted';
 }
-
 async function requestMicrophone() {
-  try {
-    const s = await navigator.mediaDevices.getUserMedia({ audio:true });
-    s.getTracks().forEach(t => t.stop());
-    return true;
-  } catch { return false; }
+  try { const s = await navigator.mediaDevices.getUserMedia({ audio:true }); s.getTracks().forEach(t=>t.stop()); return true; }
+  catch { return false; }
 }
-
 async function requestCamera() {
-  try {
-    const s = await navigator.mediaDevices.getUserMedia({ video:true });
-    s.getTracks().forEach(t => t.stop());
-    return true;
-  } catch { return false; }
+  try { const s = await navigator.mediaDevices.getUserMedia({ video:true }); s.getTracks().forEach(t=>t.stop()); return true; }
+  catch { return false; }
 }
-
-async function requestStorage() {
-  // لا يوجد API رسمي — نعتبره دائماً مسموحاً
-  // (الملفات تُرفع يدوياً من قبل المستخدم)
-  return true;
-}
+async function requestStorage() { return true; }
 
 /* ============================================================
-   3) شاشة الهوية
+   3) الهوية
    ============================================================ */
 $$('.identity-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    const uid = btn.dataset.user;
-    State.user = uid;
-    document.body.dataset.theme = uid;
+    State.user = btn.dataset.user;
+    document.body.dataset.theme = State.user;
     enterChat();
   });
 });
@@ -156,28 +138,29 @@ function enterChat() {
   initChatUI();
   loadProfiles();
   Store.updateLastSeen(State.user);
-
-  // تحديث آخر ظهور كل 20 ثانية
   setInterval(() => Store.updateLastSeen(State.user), 20000);
 
-  // استقبال الرسائل
   Store.listenMessages((msg, id) => {
     if (!msg || !msg.from) return;
+    if (State.blocked.includes(msg.from)) return;
     renderMessage(msg, id);
     scrollToBottom();
   });
 
-  // استقبال حالة المستخدمين
   Store.listenUsers(users => {
     const other = State.user === 'hamza' ? 'rawaha' : 'hamza';
     const o = users[other];
     if (o) {
       State.otherProfile = o;
-      if (o.name) {
-        $('#hdr-name').textContent = o.name;
-        $('#hdr-avatar').innerHTML = o.avatar
-          ? `<img src="${o.avatar}">`
-          : (USERS[other].name[0]);
+      if (o.name) $('#hdr-name').textContent = o.name;
+      if (o.avatar) $('#hdr-avatar').innerHTML = `<img src="${o.avatar}">`;
+      else $('#hdr-avatar').textContent = USERS[other].name[0];
+      if (o.note) {
+        let n = $('#hdr-note');
+        if (!n) { n = document.createElement('span'); n.id = 'hdr-note'; n.className = 'hdr-note'; $('.header-info').appendChild(n); }
+        n.textContent = o.note;
+      } else {
+        const n = $('#hdr-note'); if (n) n.textContent = '';
       }
       updateLastSeenUI(o.lastSeen);
     }
@@ -207,17 +190,16 @@ function updateLastSeenUI(ts) {
     }
   }
 }
-setInterval(() => {
-  if (State.otherProfile.lastSeen) updateLastSeenUI(State.otherProfile.lastSeen);
-}, 30000);
+setInterval(() => { if (State.otherProfile.lastSeen) updateLastSeenUI(State.otherProfile.lastSeen); }, 30000);
 
 /* ============================================================
-   5) تحميل بيانات البروفايل
+   5) البروفايل
    ============================================================ */
 function loadProfiles() {
   const me = State.user;
   const saved = JSON.parse(localStorage.getItem('profile_' + me) || '{}');
   if (saved.name) $('#name-input').value = saved.name;
+  if (saved.note) State.note = saved.note;
   if (saved.avatar) {
     $('#pc-avatar').innerHTML = `<img src="${saved.avatar}">`;
     $('#hdr-avatar').innerHTML = `<img src="${saved.avatar}">`;
@@ -226,38 +208,32 @@ function loadProfiles() {
   }
   Store.listenUsers(users => {
     const u = users[me];
-    if (u && u.name) {
-      $('#name-input').value = u.name;
-      if (u.avatar) {
-        $('#pc-avatar').innerHTML = `<img src="${u.avatar}">`;
-      }
-    }
+    if (u && u.name) $('#name-input').value = u.name;
+    if (u && u.avatar) $('#pc-avatar').innerHTML = `<img src="${u.avatar}">`;
   });
 }
 
-/* ---------- فتح بطاقة البروفايل ---------- */
 $('#open-profile').addEventListener('click', () => {
   $('#profile-card').classList.toggle('open');
   $('#palette-bar').classList.remove('open');
+  $('#settings-panel').classList.remove('open');
 });
 
-/* ---------- رفع صورة البروفايل ---------- */
 $('#btn-upload-avatar').addEventListener('click', () => $('#avatar-upload').click());
 $('#avatar-upload').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
     const url = await Store.uploadFile(f, p => toast(`جاري الرفع... ${Math.round(p*100)}%`));
-    localStorage.setItem('profile_' + State.user, JSON.stringify({
-      name: $('#name-input').value || USERS[State.user].name,
-      avatar: url
-    }));
     $('#pc-avatar').innerHTML = `<img src="${url}">`;
     $('#hdr-avatar').innerHTML = `<img src="${url}">`;
+    const cur = JSON.parse(localStorage.getItem('profile_' + State.user) || '{}');
+    cur.avatar = url;
+    localStorage.setItem('profile_' + State.user, JSON.stringify(cur));
+    Store.saveUser(State.user, { avatar: url, name: cur.name || USERS[State.user].name });
     toast('تم تحديث الصورة ✔');
-  } catch { toast('فشل رفع الصورة'); }
+  } catch { toast('فشل رفع الصورة — تأكد من ربط Firebase'); }
 });
 
-/* ---------- حفظ البروفايل ---------- */
 $('#btn-save-profile').addEventListener('click', () => {
   const name = $('#name-input').value.trim() || USERS[State.user].name;
   const avatar = $('#pc-avatar').querySelector('img')?.src || '';
@@ -268,7 +244,7 @@ $('#btn-save-profile').addEventListener('click', () => {
 });
 
 /* ============================================================
-   6) الألوان (8 سمات + 12 لون نصوص)
+   6) الألوان
    ============================================================ */
 const THEME_COLORS = [
   { id:'1', v:'#ff2d2d' }, { id:'2', v:'#2d7fff' },
@@ -287,33 +263,80 @@ function buildPalette() {
     s.dataset.id = c.id;
     s.addEventListener('click', () => {
       State.themeColor = c.id;
-      document.body.dataset.color = c.id;
       document.documentElement.style.setProperty('--accent', c.v);
       $$('.palette-colors .swatch').forEach(x => x.classList.toggle('active', x.dataset.id === c.id));
-      localStorage.setItem('themeColor', c.id);
+      localStorage.setItem('themeColor_' + State.user, c.id);
+      toast('تم تغيير اللون ✔');
     });
     wrap.appendChild(s);
   });
 }
 buildPalette();
-const savedColor = localStorage.getItem('themeColor');
-if (savedColor) {
-  const c = THEME_COLORS.find(x => x.id === savedColor);
-  if (c) {
-    State.themeColor = c.id;
-    document.documentElement.style.setProperty('--accent', c.v);
-    document.body.dataset.color = c.id;
-  }
-}
 
 $('#btn-palette').addEventListener('click', () => {
   $('#palette-bar').classList.toggle('open');
   $('#profile-card').classList.remove('open');
+  $('#settings-panel').classList.remove('open');
 });
 $('#btn-palette-close').addEventListener('click', () => $('#palette-bar').classList.remove('open'));
 
 /* ============================================================
-   7) عرض الرسائل
+   7) الإعدادات
+   ============================================================ */
+$('#btn-settings').addEventListener('click', () => {
+  $('#settings-panel').classList.toggle('open');
+  $('#profile-card').classList.remove('open');
+  $('#palette-bar').classList.remove('open');
+  if (State.user) {
+    $('#set-name').value = $('#name-input').value || '';
+    $('#set-note').value = State.note || '';
+  }
+});
+
+$('#set-avatar-btn').addEventListener('click', () => $('#set-avatar').click());
+$('#set-avatar').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const url = await Store.uploadFile(f);
+    $('#set-avatar-btn').textContent = '✔ تم اختيار الصورة';
+    $('#set-avatar-btn').dataset.url = url;
+  } catch { toast('فشل رفع الصورة'); }
+});
+
+$('#set-save').addEventListener('click', () => {
+  const name = $('#set-name').value.trim() || USERS[State.user].name;
+  const note = $('#set-note').value.trim();
+  const newAvatar = $('#set-avatar-btn').dataset.url;
+  const cur = JSON.parse(localStorage.getItem('profile_' + State.user) || '{}');
+  const avatar = newAvatar || cur.avatar || '';
+
+  Store.saveUser(State.user, { name, note, avatar });
+  localStorage.setItem('profile_' + State.user, JSON.stringify({ name, note, avatar }));
+  State.note = note;
+
+  $('#name-input').value = name;
+  if (avatar) {
+    $('#pc-avatar').innerHTML = `<img src="${avatar}">`;
+    $('#hdr-avatar').innerHTML = `<img src="${avatar}">`;
+  }
+  toast('تم حفظ الإعدادات ✔');
+  $('#settings-panel').classList.remove('open');
+});
+
+$('#set-close').addEventListener('click', () => $('#settings-panel').classList.remove('open'));
+
+/* ============================================================
+   8) زر التحديث
+   ============================================================ */
+$('#btn-refresh').addEventListener('click', () => {
+  const btn = $('#btn-refresh');
+  btn.style.transform = 'rotate(360deg)';
+  btn.style.transition = 'transform .6s';
+  setTimeout(() => { btn.style.transform = ''; location.reload(); }, 600);
+});
+
+/* ============================================================
+   9) عرض الرسائل
    ============================================================ */
 function renderMessage(msg, id) {
   const isMe = msg.from === State.user;
@@ -321,28 +344,30 @@ function renderMessage(msg, id) {
   row.className = 'msg-row ' + (isMe ? 'me' : 'other');
   row.dataset.id = id;
 
-  // الصورة الرمزية
   const avatar = document.createElement('div');
   avatar.className = 'msg-avatar';
-  const prof = msg.avatar;
-  if (prof) avatar.innerHTML = `<img src="${prof}">`;
+  if (msg.avatar) avatar.innerHTML = `<img src="${msg.avatar}">`;
   else avatar.textContent = (msg.fromName || '?')[0];
   row.appendChild(avatar);
 
-  // الفقاعة
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble';
   if (msg.blur && !msg.revealed) bubble.classList.add('blurred');
 
-  // الرد
   if (msg.replyTo) {
     const r = document.createElement('div');
     r.className = 'msg-reply';
-    r.innerHTML = `<b>${msg.replyTo.name || ''}</b>${escapeHtml(msg.replyTo.text || '')}`;
+    r.innerHTML = `<b>${escapeHtml(msg.replyTo.name || '')}</b>${escapeHtml(msg.replyTo.text || '')}`;
     bubble.appendChild(r);
   }
 
-  // المحتوى
+  if (msg.note) {
+    const nt = document.createElement('span');
+    nt.className = 'msg-note';
+    nt.textContent = '💭 ' + msg.note;
+    bubble.appendChild(nt);
+  }
+
   const content = document.createElement('div');
   content.className = 'msg-content';
 
@@ -368,13 +393,11 @@ function renderMessage(msg, id) {
   }
   bubble.appendChild(content);
 
-  // الوقت
   const time = document.createElement('span');
   time.className = 'msg-time';
   time.textContent = formatTime(msg.timestamp);
   bubble.appendChild(time);
 
-  // التفاعلات
   if (msg.reactions && Object.keys(msg.reactions).length) {
     const rx = document.createElement('div');
     rx.className = 'msg-reactions';
@@ -383,7 +406,6 @@ function renderMessage(msg, id) {
     bubble.appendChild(rx);
   }
 
-  // أحداث
   bubble.addEventListener('click', () => {
     if (bubble.classList.contains('blurred') && !isMe) {
       bubble.classList.add('revealed');
@@ -393,13 +415,12 @@ function renderMessage(msg, id) {
   });
 
   let pressTimer = null;
-  bubble.addEventListener('touchstart', e => {
+  bubble.addEventListener('touchstart', () => {
     pressTimer = setTimeout(() => openReactions(id, bubble), 500);
   }, { passive:true });
   bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
   bubble.addEventListener('contextmenu', e => { e.preventDefault(); openReactions(id, bubble); });
 
-  // السحب للرد
   attachSwipeToReply(bubble, msg);
 
   row.appendChild(bubble);
@@ -410,7 +431,6 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-/* تحويل ~1نص~ إلى <span class="tc1">نص</span> */
 function parseColorCodes(text) {
   const safe = escapeHtml(text);
   return safe.replace(/~(\d{1,2})([^~]+)~/g, (_, n, t) => {
@@ -431,7 +451,7 @@ function scrollToBottom() {
 }
 
 /* ============================================================
-   8) إرسال الرسائل
+   10) الإرسال
    ============================================================ */
 $('#btn-send').addEventListener('click', sendTextMessage);
 $('#msg-input').addEventListener('keydown', e => {
@@ -447,7 +467,6 @@ function sendTextMessage() {
   const text = input.value.trim();
   if (!text) return;
 
-  // أمر التحميل
   if (text === '.تحميل' && State.replyTo) {
     downloadReply(State.replyTo);
     input.value = '';
@@ -459,6 +478,7 @@ function sendTextMessage() {
     from: State.user,
     fromName: $('#name-input').value || USERS[State.user].name,
     avatar: $('#pc-avatar').querySelector('img')?.src || '',
+    note: State.note,
     type: 'text',
     text,
     blur: State.pendingBlur,
@@ -471,6 +491,7 @@ function sendTextMessage() {
   input.style.height = 'auto';
   clearReply();
   State.pendingBlur = false;
+  toast('تم الإرسال ✔');
 }
 
 function downloadReply(r) {
@@ -483,22 +504,17 @@ function downloadReply(r) {
 }
 
 /* ============================================================
-   9) الرد والسحب
+   11) الرد والسحب
    ============================================================ */
 function attachSwipeToReply(bubble, msg) {
   let startX = 0, moved = false;
-  bubble.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX; moved = false;
-  }, { passive:true });
+  bubble.addEventListener('touchstart', e => { startX = e.touches[0].clientX; moved = false; }, { passive:true });
   bubble.addEventListener('touchmove', e => {
     const dx = e.touches[0].clientX - startX;
     if (dx > 60) { moved = true; bubble.style.transform = `translateX(${Math.min(dx,100)}px)`; }
   }, { passive:true });
-  bubble.addEventListener('touchend', e => {
-    if (moved) {
-      bubble.style.transform = '';
-      setReply(msg);
-    }
+  bubble.addEventListener('touchend', () => {
+    if (moved) { bubble.style.transform = ''; setReply(msg); }
   });
 }
 
@@ -514,14 +530,11 @@ function setReply(msg) {
   $('#rp-text').textContent = State.replyTo.text;
   $('#reply-preview').classList.add('open');
 }
-function clearReply() {
-  State.replyTo = null;
-  $('#reply-preview').classList.remove('open');
-}
+function clearReply() { State.replyTo = null; $('#reply-preview').classList.remove('open'); }
 $('#rp-cancel').addEventListener('click', clearReply);
 
 /* ============================================================
-   10) قائمة (+)
+   12) قائمة (+)
    ============================================================ */
 $('#btn-plus').addEventListener('click', () => {
   $('#options-panel').classList.toggle('open');
@@ -543,63 +556,82 @@ $$('.opt-btn').forEach(b => {
   });
 });
 
-/* رفع الصور */
+/* رفع الصور — مع محاولة بديلة */
 $('#file-input').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
+  toast('جاري رفع الصورة...');
   try {
-    const url = await Store.uploadFile(f, p => toast(`رفع ${Math.round(p*100)}%`));
+    let url = await Store.uploadFile(f, p => toast(`رفع ${Math.round(p*100)}%`));
+    if (!url) url = await fallbackBase64(f);
     Store.sendMessage({
       from: State.user,
       fromName: $('#name-input').value || USERS[State.user].name,
       avatar: $('#pc-avatar').querySelector('img')?.src || '',
+      note: State.note,
       type: 'image', url, fileName: f.name,
       replyTo: State.replyTo, reactions: {}
     });
+    toast('تم إرسال الصورة ✔');
     clearReply();
-  } catch { toast('فشل رفع الصورة'); }
+  } catch (err) { console.error(err); toast('فشل رفع الصورة'); }
   e.target.value = '';
 });
 
-/* رفع الموسيقى */
 $('#music-input').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
+  toast('جاري رفع الصوت...');
   try {
-    const url = await Store.uploadFile(f, p => toast(`رفع ${Math.round(p*100)}%`));
+    let url = await Store.uploadFile(f, p => toast(`رفع ${Math.round(p*100)}%`));
+    if (!url) url = await fallbackBase64(f);
     Store.sendMessage({
       from: State.user,
       fromName: $('#name-input').value || USERS[State.user].name,
       avatar: $('#pc-avatar').querySelector('img')?.src || '',
+      note: State.note,
       type: 'audio', url, fileName: f.name,
       replyTo: State.replyTo, reactions: {}
     });
+    toast('تم إرسال الصوت ✔');
     clearReply();
-  } catch { toast('فشل رفع الصوت'); }
+  } catch (err) { console.error(err); toast('فشل رفع الصوت'); }
   e.target.value = '';
 });
 
-/* رفع الملفات */
 $('#doc-input').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
+  toast('جاري رفع الملف...');
   try {
-    const url = await Store.uploadFile(f, p => toast(`رفع ${Math.round(p*100)}%`));
+    let url = await Store.uploadFile(f, p => toast(`رفع ${Math.round(p*100)}%`));
+    if (!url) url = await fallbackBase64(f);
     Store.sendMessage({
       from: State.user,
       fromName: $('#name-input').value || USERS[State.user].name,
       avatar: $('#pc-avatar').querySelector('img')?.src || '',
+      note: State.note,
       type: 'file', url, fileName: f.name,
       replyTo: State.replyTo, reactions: {}
     });
+    toast('تم إرسال الملف ✔');
     clearReply();
-  } catch { toast('فشل رفع الملف'); }
+  } catch (err) { console.error(err); toast('فشل رفع الملف'); }
   e.target.value = '';
 });
 
+function fallbackBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
 /* ============================================================
-   11) الإيموجي
+   13) الإيموجي
    ============================================================ */
 const EMOJIS = ('😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😗 ☺️ 😚 😙 ' +
 '🥲 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 😮‍💨 🤥 😌 😔 😪 🤤 ' +
-'😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 🤯 🤠 🥳 🥺 🥹 😢 😭 😤 😠 😡 🤬 🤥 🤡 💀 ☠️ ' +
+'😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 🤯 🤠 🥳 🥺 🥹 😢 😭 😤 😠 😡 🤬 🤡 💀 ☠️ ' +
 '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 🔥 ✨ ⭐ 🌟 💫 ⚡ ' +
 '👍 👎 👌 ✌️ 🤞 🤟 🤘 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤙 💪 🙏 🫶').split(' ');
 
@@ -625,7 +657,7 @@ $('#btn-emoji').addEventListener('click', () => {
 });
 
 /* ============================================================
-   12) التفاعلات
+   14) التفاعلات
    ============================================================ */
 function openReactions(msgId, bubble) {
   State.currentReactionMsgId = msgId;
@@ -645,7 +677,7 @@ $$('#reactions-bar span').forEach(s => {
 });
 
 function addReaction(msgId, emo) {
-  if (fbReady) {
+  if (typeof fbReady !== 'undefined' && fbReady) {
     const ref = fbDB.ref(`messages/${msgId}/reactions/${emo}`);
     ref.transaction(cur => {
       cur = cur || [];
@@ -664,7 +696,6 @@ function addReaction(msgId, emo) {
     if (k >= 0) m.reactions[emo].splice(k,1);
     else m.reactions[emo].push(State.user);
     localStorage.setItem('local_msgs', JSON.stringify(msgs));
-    // إعادة رسم
     toast('تم التفاعل ' + emo);
   }
 }
@@ -682,12 +713,13 @@ document.addEventListener('click', e => {
 });
 
 /* ============================================================
-   13) التسجيل الصوتي
+   15) التسجيل الصوتي
    ============================================================ */
 $('#btn-mic').addEventListener('click', startRecording);
 $('#rec-cancel').addEventListener('click', cancelRecording);
 $('#rec-pause').addEventListener('click', pauseRecording);
 $('#rec-draft').addEventListener('click', saveDraft);
+$('#rec-send').addEventListener('click', sendRecording);
 
 async function startRecording() {
   try {
@@ -701,17 +733,10 @@ async function startRecording() {
     State.mediaRecorder.ondataavailable = e => State.recChunks.push(e.data);
     State.mediaRecorder.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
+      if (State.cancelled) { State.cancelled = false; cleanupRecording(); return; }
+      if (State.savedAsDraft) { State.savedAsDraft = false; cleanupRecording(); return; }
       const blob = new Blob(State.recChunks, { type:'audio/webm' });
-      const f = new File([blob], 'voice_' + Date.now() + '.webm', { type:'audio/webm' });
-      const url = await Store.uploadFile(f);
-      Store.sendMessage({
-        from: State.user,
-        fromName: $('#name-input').value || USERS[State.user].name,
-        avatar: $('#pc-avatar').querySelector('img')?.src || '',
-        type: 'audio', url, fileName: 'تسجيل صوتي',
-        replyTo: State.replyTo, reactions: {}
-      });
-      clearReply();
+      await sendAudioBlob(blob);
     };
 
     State.mediaRecorder.start();
@@ -719,6 +744,25 @@ async function startRecording() {
     $('#btn-mic').textContent = '⏹';
     startRecTimer();
   } catch { toast('لا يمكن الوصول للميكروفون'); }
+}
+
+async function sendAudioBlob(blob) {
+  const f = new File([blob], 'voice_' + Date.now() + '.webm', { type:'audio/webm' });
+  toast('جاري رفع التسجيل...');
+  try {
+    let url = await Store.uploadFile(f);
+    if (!url) url = await fallbackBase64(f);
+    Store.sendMessage({
+      from: State.user,
+      fromName: $('#name-input').value || USERS[State.user].name,
+      avatar: $('#pc-avatar').querySelector('img')?.src || '',
+      note: State.note,
+      type: 'audio', url, fileName: 'تسجيل صوتي',
+      replyTo: State.replyTo, reactions: {}
+    });
+    toast('تم إرسال التسجيل ✔');
+    clearReply();
+  } catch (err) { console.error(err); toast('فشل رفع التسجيل'); }
 }
 
 function startRecTimer() {
@@ -734,10 +778,9 @@ function startRecTimer() {
 
 function cancelRecording() {
   if (State.mediaRecorder && State.recording) {
-    State.mediaRecorder.onstop = null;
+    State.cancelled = true;
     State.mediaRecorder.stop();
-  }
-  cleanupRecording();
+  } else cleanupRecording();
   toast('تم إلغاء التسجيل');
 }
 
@@ -754,16 +797,22 @@ function pauseRecording() {
   }
 }
 
+function sendRecording() {
+  if (!State.mediaRecorder) return;
+  State.mediaRecorder.stop();
+  cleanupRecording();
+}
+
 async function saveDraft() {
   if (!State.mediaRecorder) return;
-  // أنشئ blob مؤقت واحفظه في localStorage
+  State.savedAsDraft = true;
+  State.mediaRecorder.stop();
   const chunks = State.recChunks.slice();
   const blob = new Blob(chunks, { type:'audio/webm' });
   const reader = new FileReader();
   reader.onload = () => {
     Store.saveDraft(State.user, reader.result);
     toast('⏳ تم حفظ المسودة');
-    cancelRecording();
   };
   reader.readAsDataURL(blob);
 }
@@ -778,10 +827,11 @@ function cleanupRecording() {
   $('#record-panel').classList.remove('open');
   $('#btn-mic').textContent = '🎤';
   $('#rec-time').textContent = '00:00';
+  $('#rec-pause').textContent = '■';
 }
 
 /* ============================================================
-   14) العارض والمشغل
+   16) العارض والتوست
    ============================================================ */
 function openViewer(type, url) {
   const body = $('#viewer-body');
@@ -793,9 +843,6 @@ function openViewer(type, url) {
 }
 $('#viewer-close').addEventListener('click', () => $('#viewer').classList.remove('open'));
 
-/* ============================================================
-   15) التوست
-   ============================================================ */
 let toastTimer;
 function toast(msg) {
   const t = $('#toast');
@@ -806,31 +853,26 @@ function toast(msg) {
 }
 
 /* ============================================================
-   16) التنقل بين الشاشات
+   17) التنقل
    ============================================================ */
 function goTo(id) {
   $$('.screen').forEach(s => s.classList.remove('active'));
   $('#' + id).classList.add('active');
 }
 
-/* ---------- زر الرجوع من الشات ---------- */
 $('#btn-back').addEventListener('click', () => {
-  if (confirm('هل تريد الخروج؟')) {
-    location.reload();
-  }
+  if (confirm('هل تريد الخروج؟')) location.reload();
 });
 
 /* ============================================================
-   17) الجزيئات في الخلفية
+   18) الجزيئات
    ============================================================ */
 (function initParticles() {
   const c = $('#particles');
+  if (!c) return;
   const ctx = c.getContext('2d');
   let W, H, parts = [];
-  function resize() {
-    W = c.width = window.innerWidth;
-    H = c.height = window.innerHeight;
-  }
+  function resize() { W = c.width = window.innerWidth; H = c.height = window.innerHeight; }
   function make() {
     parts = [];
     for (let i = 0; i < 40; i++) {
@@ -861,11 +903,8 @@ $('#btn-back').addEventListener('click', () => {
   resize(); make(); loop();
 })();
 
-/* ============================================================
-   18) منع إغلاق الصفحة أثناء التسجيل
-   ============================================================ */
 window.addEventListener('beforeunload', e => {
   if (State.recording) { e.preventDefault(); e.returnValue = ''; }
 });
 
-console.log('%c✅ التطبيق جاهز', 'color:#10b981;font-weight:bold;font-size:14px');
+console.log('%c✅ app.js محدّث بكل الميزات', 'color:#10b981;font-weight:bold;font-size:14px');

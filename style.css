@@ -1,4 +1,8 @@
 /* ============================================================
+   style.css — الإصدار الكامل المحدّث
+   ============================================================ */
+
+/* ============================================================
    متغيرات الألوان والسمات
    ============================================================ */
 :root {
@@ -14,13 +18,13 @@
   --trans:.3s cubic-bezier(.4,.2,.2,1);
 }
 
-/* سمة حمزة (أسود + زيتي) */
+/* سمة حمزة (أسود + زيتي + أخضر) */
 body[data-theme="hamza"] {
-  --bg-1:#050505; --bg-2:#0a0a08;
-  --edge:#2a2a1a; --edge-glow:rgba(180,180,120,.35);
-  --bubble-me:#14140f; --bubble-me-border:#3a3a25;
-  --bubble-other:#0f0f0f; --bubble-other-border:#2a2a1a;
-  --accent:#b8b87a;
+  --bg-1:#050505; --bg-2:#0a0f08;
+  --edge:#2a3a1a; --edge-glow:rgba(120,180,60,.4);
+  --bubble-me:#0f1408; --bubble-me-border:#5a7a2a;
+  --bubble-other:#0a0a0a; --bubble-other-border:#2a3a1a;
+  --accent:#7ab82a;
 }
 /* سمة رواحة (أحمر + خمري) */
 body[data-theme="rawaha"] {
@@ -61,7 +65,7 @@ button { cursor:pointer; border:none; background:none; }
   animation:float 18s ease-in-out infinite;
 }
 .orb-a { width:60vmin; height:60vmin; background:var(--accent);
-  top:-10vmin; right:-10vmin; animation-delay:0s; }
+  top:-10vmin; right:-10vmin; }
 .orb-b { width:50vmin; height:50vmin; background:var(--c2);
   bottom:-10vmin; left:-10vmin; animation-delay:-6s; }
 .orb-c { width:40vmin; height:40vmin; background:var(--c6);
@@ -124,7 +128,7 @@ button { cursor:pointer; border:none; background:none; }
 }
 @keyframes bob { 0%,100% { transform:translateY(0) rotate(-3deg); } 50% { transform:translateY(-8px) rotate(3deg); } }
 
-/* الأجراس */
+/* الجرس */
 .bell-3d {
   font-size:64px; margin-bottom:16px; cursor:pointer;
   filter:drop-shadow(0 0 24px var(--accent));
@@ -255,12 +259,12 @@ button { cursor:pointer; border:none; background:none; }
 .identity-btn:hover { transform:translateY(-3px); }
 
 .identity-hamza {
-  background:linear-gradient(135deg, #0a0a08, #1a1a14);
-  border:1.5px solid #3a3a25;
+  background:linear-gradient(135deg, #0a0f08, #1a2a14);
+  border:1.5px solid #3a5a25;
   color:#f0f0e0;
-  box-shadow:0 10px 30px rgba(180,180,120,.25), inset 0 1px 0 rgba(200,200,150,.1);
+  box-shadow:0 10px 30px rgba(120,180,60,.25), inset 0 1px 0 rgba(180,220,120,.1);
 }
-.identity-hamza:hover { border-color:#b8b87a; box-shadow:0 16px 44px rgba(180,180,120,.45); }
+.identity-hamza:hover { border-color:#7ab82a; box-shadow:0 16px 44px rgba(120,180,60,.5); }
 
 .identity-rawaha {
   background:linear-gradient(135deg, #2a0404, #150202);
@@ -276,7 +280,9 @@ button { cursor:pointer; border:none; background:none; }
   font-size:22px; font-weight:900;
   background:rgba(0,0,0,.5);
   border:2px solid currentColor;
+  overflow:hidden;
 }
+.id-avatar img { width:100%; height:100%; object-fit:cover; }
 .id-info { display:flex; flex-direction:column; }
 .id-name { font-size:18px; font-weight:800; }
 .id-tag { font-size:12px; opacity:.7; }
@@ -293,14 +299,46 @@ button { cursor:pointer; border:none; background:none; }
 }
 #screen-chat.active { display:flex; }
 
+/* خلفيات الشات المخصصة */
+body[data-theme="hamza"] #screen-chat {
+  background-image:url('jes.jpg');
+  background-size:cover;
+  background-position:center;
+  background-attachment:fixed;
+}
+body[data-theme="hamza"] #screen-chat::before {
+  content:''; position:fixed; inset:0;
+  background:linear-gradient(180deg, rgba(5,10,5,.85), rgba(5,10,5,.93));
+  z-index:0; pointer-events:none;
+}
+body[data-theme="hamza"] .messages,
+body[data-theme="hamza"] .chat-header,
+body[data-theme="hamza"] .chat-input { position:relative; z-index:1; }
+
+body[data-theme="rawaha"] #screen-chat {
+  background-image:url('ita.jpg');
+  background-size:cover;
+  background-position:center;
+  background-attachment:fixed;
+}
+body[data-theme="rawaha"] #screen-chat::before {
+  content:''; position:fixed; inset:0;
+  background:linear-gradient(180deg, rgba(10,2,2,.85), rgba(10,2,2,.93));
+  z-index:0; pointer-events:none;
+}
+body[data-theme="rawaha"] .messages,
+body[data-theme="rawaha"] .chat-header,
+body[data-theme="rawaha"] .chat-input { position:relative; z-index:1; }
+
 /* الهيدر */
 .chat-header {
-  display:flex; align-items:center; gap:10px;
+  display:flex; align-items:center; gap:8px;
   padding:12px 14px;
-  background:rgba(0,0,0,.5);
+  background:rgba(0,0,0,.55);
   backdrop-filter:blur(20px);
   border-bottom:1px solid var(--glass-border);
   z-index:10;
+  flex-wrap:nowrap;
 }
 .icon-btn {
   width:42px; height:42px;
@@ -310,6 +348,7 @@ button { cursor:pointer; border:none; background:none; }
   background:rgba(255,255,255,.05);
   border:1px solid var(--glass-border);
   transition:all var(--trans);
+  flex-shrink:0;
 }
 .icon-btn:hover { background:rgba(255,255,255,.1); border-color:var(--accent); }
 .icon-btn.small { width:32px; height:32px; font-size:14px; border-radius:9px; }
@@ -321,6 +360,7 @@ button { cursor:pointer; border:none; background:none; }
   flex:1; display:flex; align-items:center; gap:12px;
   padding:6px 10px; border-radius:12px;
   cursor:pointer; transition:background var(--trans);
+  min-width:0;
 }
 .header-profile:hover { background:rgba(255,255,255,.05); }
 .header-avatar {
@@ -330,18 +370,28 @@ button { cursor:pointer; border:none; background:none; }
   background:linear-gradient(135deg, var(--accent), #000);
   border:2px solid var(--edge);
   overflow:hidden;
+  flex-shrink:0;
 }
 .header-avatar img { width:100%; height:100%; object-fit:cover; }
-.header-info { display:flex; flex-direction:column; line-height:1.2; }
+.header-info { display:flex; flex-direction:column; line-height:1.2; min-width:0; flex:1; }
 .hdr-name { font-weight:700; font-size:15px; }
 .hdr-status { font-size:11px; color:var(--muted); }
 .hdr-status.online { color:#10b981; }
+.hdr-note {
+  font-size:10px;
+  color:var(--c3);
+  margin-top:2px;
+  font-style:italic;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 
 /* شريط الألوان */
 .palette-bar {
   position:absolute; top:66px; left:0; right:0;
   padding:12px;
-  background:rgba(0,0,0,.85);
+  background:rgba(0,0,0,.88);
   backdrop-filter:blur(20px);
   border-bottom:1px solid var(--glass-border);
   display:none; align-items:center; gap:10px;
@@ -364,7 +414,7 @@ button { cursor:pointer; border:none; background:none; }
 .profile-card {
   position:absolute; top:66px; left:12px; right:12px;
   padding:24px;
-  background:rgba(0,0,0,.92);
+  background:rgba(0,0,0,.94);
   backdrop-filter:blur(30px);
   border:1px solid var(--edge);
   border-radius:20px;
@@ -394,10 +444,37 @@ button { cursor:pointer; border:none; background:none; }
 .pc-name-input:focus { outline:none; border-color:var(--accent); }
 .pc-tag { font-size:12px; color:var(--muted); }
 
+/* لوحة الإعدادات */
+.settings-panel {
+  position:absolute; top:66px; left:12px; right:12px;
+  padding:20px;
+  background:rgba(0,0,0,.96);
+  backdrop-filter:blur(30px);
+  border:1px solid var(--edge);
+  border-radius:20px;
+  display:none; flex-direction:column; gap:10px;
+  z-index:25;
+  box-shadow:0 30px 80px rgba(0,0,0,.8), 0 0 40px var(--edge-glow);
+  animation:popIn .35s ease;
+  max-height:80vh;
+  overflow-y:auto;
+}
+.settings-panel.open { display:flex; }
+.settings-panel h3 { font-size:16px; margin-bottom:6px; color:var(--accent); text-align:center; }
+.settings-panel label { font-size:12px; color:var(--muted); text-align:right; margin-top:6px; }
+.settings-panel input {
+  width:100%; padding:10px 14px;
+  background:rgba(255,255,255,.05);
+  border:1px solid var(--glass-border);
+  border-radius:12px; font-size:14px;
+}
+.settings-panel input:focus { outline:none; border-color:var(--accent); }
+.settings-panel .btn { margin-top:6px; }
+
 /* منطقة الرسائل */
 .messages {
   flex:1; overflow-y:auto;
-  padding:70px 12px 20px;
+  padding:14px 12px 20px;
   display:flex; flex-direction:column; gap:8px;
   scroll-behavior:smooth;
 }
@@ -444,6 +521,14 @@ button { cursor:pointer; border:none; background:none; }
 }
 .msg-bubble:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(0,0,0,.4); }
 
+.msg-note {
+  font-size:10px;
+  color:var(--c3);
+  margin-bottom:4px;
+  display:block;
+  font-style:italic;
+}
+
 .msg-time {
   display:block;
   font-size:10px; color:var(--muted);
@@ -485,7 +570,7 @@ button { cursor:pointer; border:none; background:none; }
 .msg-reactions {
   position:absolute; bottom:-12px;
   display:flex; gap:2px;
-  background:rgba(0,0,0,.8);
+  background:rgba(0,0,0,.85);
   border:1px solid var(--glass-border);
   border-radius:12px;
   padding:2px 6px;
@@ -523,7 +608,7 @@ button { cursor:pointer; border:none; background:none; }
   display:none;
   margin:0 12px;
   padding:8px 12px;
-  background:rgba(0,0,0,.6);
+  background:rgba(0,0,0,.7);
   border-radius:12px;
   border-right:3px solid var(--accent);
   align-items:center; gap:10px;
@@ -537,7 +622,7 @@ button { cursor:pointer; border:none; background:none; }
 .options-panel {
   position:absolute; bottom:70px; right:12px;
   padding:10px;
-  background:rgba(0,0,0,.92);
+  background:rgba(0,0,0,.94);
   backdrop-filter:blur(30px);
   border:1px solid var(--edge);
   border-radius:18px;
@@ -568,7 +653,7 @@ button { cursor:pointer; border:none; background:none; }
 .record-panel {
   position:absolute; left:12px; right:12px; bottom:70px;
   padding:16px 20px;
-  background:linear-gradient(135deg, rgba(255,45,45,.15), rgba(0,0,0,.9));
+  background:linear-gradient(135deg, rgba(255,45,45,.18), rgba(0,0,0,.92));
   backdrop-filter:blur(30px);
   border:1.5px solid var(--accent);
   border-radius:20px;
@@ -600,13 +685,14 @@ button { cursor:pointer; border:none; background:none; }
 .rec-cancel { background:#ef4444; color:#fff; }
 .rec-pause  { background:#f59e0b; color:#fff; }
 .rec-draft  { background:#10b981; color:#fff; }
+.rec-send   { background:#2d7fff; color:#fff; }
 .rec-btn:hover { transform:scale(1.1); }
 
 /* إدخال الرسائل */
 .chat-input {
   display:flex; align-items:flex-end; gap:6px;
   padding:10px 12px;
-  background:rgba(0,0,0,.6);
+  background:rgba(0,0,0,.65);
   backdrop-filter:blur(20px);
   border-top:1px solid var(--glass-border);
   z-index:10;
@@ -629,7 +715,7 @@ button { cursor:pointer; border:none; background:none; }
   position:absolute; bottom:70px; left:12px;
   width:280px; max-height:280px;
   padding:10px;
-  background:rgba(0,0,0,.94);
+  background:rgba(0,0,0,.95);
   backdrop-filter:blur(30px);
   border:1px solid var(--edge);
   border-radius:18px;
@@ -652,9 +738,9 @@ button { cursor:pointer; border:none; background:none; }
 
 /* شريط التفاعلات */
 .reactions-bar {
-  position:absolute;
+  position:fixed;
   padding:6px 10px;
-  background:rgba(0,0,0,.95);
+  background:rgba(0,0,0,.96);
   backdrop-filter:blur(20px);
   border:1px solid var(--edge);
   border-radius:20px;
@@ -688,7 +774,7 @@ button { cursor:pointer; border:none; background:none; }
 .audio-player {
   position:fixed; left:12px; right:12px; bottom:80px;
   padding:12px;
-  background:rgba(0,0,0,.95);
+  background:rgba(0,0,0,.96);
   backdrop-filter:blur(30px);
   border:1px solid var(--edge);
   border-radius:16px;
@@ -706,7 +792,7 @@ button { cursor:pointer; border:none; background:none; }
 .toast {
   position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(100px);
   padding:12px 22px;
-  background:rgba(0,0,0,.95);
+  background:rgba(0,0,0,.96);
   border:1px solid var(--accent);
   border-radius:14px;
   font-size:13px; font-weight:600;
@@ -714,6 +800,10 @@ button { cursor:pointer; border:none; background:none; }
   opacity:0; pointer-events:none;
   transition:all .35s cubic-bezier(.2,1.2,.3,1);
   z-index:200;
+  white-space:nowrap;
+  max-width:90vw;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
@@ -723,9 +813,14 @@ button { cursor:pointer; border:none; background:none; }
 .tc7{color:var(--c7)} .tc8{color:var(--c8)} .tc9{color:#fff}
 .tc10{color:#000; text-shadow:0 0 4px #fff} .tc11{color:#d4af37} .tc12{color:#c0c0c0}
 
-/* استجابة الشاشة الصغيرة */
+/* ============================================================
+   استجابة الشاشة الصغيرة
+   ============================================================ */
 @media (max-width:420px) {
   .screen-title { font-size:24px; }
   .glass-panel { padding:28px 22px; }
   .msg-bubble { max-width:82%; font-size:14px; }
+  .icon-btn { width:38px; height:38px; font-size:16px; }
+  .header-avatar { width:38px; height:38px; }
+  .hdr-name { font-size:14px; }
 }
