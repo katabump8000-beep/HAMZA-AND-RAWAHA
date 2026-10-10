@@ -2,17 +2,17 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#000">
 <title>Hamza & Rawaha</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 
-<!-- طبقات الخلفية 3D -->
+<!-- طبقات الخلفية -->
 <div class="bg-3d">
   <div class="orb orb-a"></div>
   <div class="orb orb-b"></div>
@@ -21,7 +21,6 @@
   <canvas id="particles"></canvas>
 </div>
 
-<!-- ============ شاشة 1: كلمة السر ============ -->
 <!-- ============ شاشة 0: جار التحميل ============ -->
 <section id="screen-loading" class="screen active">
   <div class="loading-box">
@@ -109,8 +108,14 @@
         <span class="inbox-my-note" id="inbox-my-note">متصل الآن</span>
       </div>
     </div>
-    <button id="btn-hack" class="hack-btn" title="تهكير">تهكير <span class="skull">💀</span></button>
     <button id="btn-inbox-settings" class="icon-btn" title="الإعدادات">⚙️</button>
+  </div>
+
+  <!-- شريط الأدوات: تهكير + نماذج + الخط -->
+  <div class="inbox-toolbar">
+    <button id="btn-hack" class="hack-btn" title="تهكير">تهكير <span class="skull">💀</span></button>
+    <button id="btn-models" class="pill-btn models" title="نماذج">نماذج 📐</button>
+    <button id="btn-font" class="pill-btn font" title="الخط">الخط 🖋</button>
   </div>
 
   <div class="mode-banner" id="mode-banner">⚠️ الوضع المحلي: الرسائل لن تصل لجهاز آخر — يلزم ملء إعدادات Firebase في firebase.js</div>
@@ -120,16 +125,15 @@
 
   <div class="inbox-footer">
     <button id="btn-inbox-refresh" class="btn btn-ghost small">🔄 تحديث</button>
+    <button id="btn-tools" class="btn btn-ghost small">🧰 ادوات</button>
   </div>
-
-  <div class="wave-deco"><i></i><i></i><i></i></div>
 </section>
 
 <!-- ============ شاشة 5: الشات ============ -->
 <section id="screen-chat" class="screen">
 
   <!-- الهيدر -->
-  <header class="chat-header">
+  <header class="chat-header" id="chat-header">
     <button id="btn-back" class="icon-btn" title="رجوع">←</button>
     <div class="header-profile" id="open-profile">
       <div class="header-avatar" id="hdr-avatar">?</div>
@@ -160,35 +164,10 @@
     <div class="search-results" id="search-results"></div>
   </div>
 
-  <!-- شريط الألوان -->
+  <!-- شريط الألوان (لون الموقع) -->
   <div class="palette-bar" id="palette-bar">
     <div class="palette-colors" id="palette-colors"></div>
     <button id="btn-palette-close" class="icon-btn small">✕</button>
-  </div>
-
-  <!-- لوحة الإعدادات -->
-  <div class="settings-panel" id="settings-panel">
-    <h3>⚙️ الإعدادات</h3>
-    <label>اسمك المزخرف</label>
-    <input id="set-name" maxlength="24" placeholder="اسمك...">
-    <label>ملاحظة تظهر تحت اسمك</label>
-    <input id="set-note" maxlength="60" placeholder="مثال: مشغول قليلاً 💭">
-    <label>صورة البروفايل</label>
-    <button id="set-avatar-btn" class="btn small">📷 تغيير الصورة</button>
-    <input type="file" id="set-avatar" accept="image/*" hidden>
-    <button id="set-save" class="btn btn-primary small">حفظ الإعدادات</button>
-    <button id="set-close" class="btn btn-ghost small">إغلاق</button>
-    <button id="set-logout" class="btn btn-ghost small">🚪 تبديل الحساب</button>
-  </div>
-
-  <!-- بطاقة البروفايل -->
-  <div class="profile-card" id="profile-card">
-    <div class="pc-avatar" id="pc-avatar">?</div>
-    <input type="file" id="avatar-upload" accept="image/*" hidden>
-    <button id="btn-upload-avatar" class="btn small">تغيير الصورة</button>
-    <input id="name-input" class="pc-name-input" maxlength="24" placeholder="اسمك المزخرف ✨">
-    <span class="pc-tag" id="pc-tag">—</span>
-    <button id="btn-save-profile" class="btn btn-primary small">حفظ</button>
   </div>
 
   <!-- منطقة الرسائل -->
@@ -218,6 +197,16 @@
     <button class="opt-btn" data-opt="blur">
       <span class="opt-ico">🌫️</span><span>مغبشة</span>
     </button>
+    <button class="opt-btn" data-opt="color">
+      <span class="opt-ico" id="opt-color-dot">🎨</span><span class="rainbow-word">تلوين</span>
+    </button>
+  </div>
+
+  <!-- اختيار لون الكتابة (12 لون) -->
+  <div class="pop-sheet" id="color-pop">
+    <div class="pop-title"><span class="rainbow-word">تلوين</span> — اختر لون كتابتك (يبقى ثابتاً)</div>
+    <div class="color-grid" id="color-grid"></div>
+    <button id="color-none" class="btn btn-ghost small">بدون لون</button>
   </div>
 
   <!-- لوحة التسجيل -->
@@ -226,28 +215,23 @@
     <span class="rec-time" id="rec-time">00:00</span>
     <div class="rec-actions">
       <button id="rec-cancel" class="rec-btn rec-cancel" title="إلغاء">✕</button>
-      <button id="rec-pause" class="rec-btn rec-pause" title="إيقاف مؤقت">■</button>
+      <button id="rec-pause" class="rec-btn rec-pause" title="إيقاف مؤقت">⏸</button>
       <button id="rec-draft" class="rec-btn rec-draft" title="مسودة">⏳</button>
       <button id="rec-send" class="rec-btn rec-send" title="إرسال">➤</button>
     </div>
   </div>
 
   <!-- إدخال الرسائل -->
-  <footer class="chat-input">
+  <footer class="chat-input" id="chat-input">
     <button id="btn-plus" class="icon-btn plus" title="خيارات">+</button>
-    <button id="btn-emoji" class="icon-btn" title="إيموجي">😊</button>
-    <input type="file" id="file-input" hidden>
+    <button id="btn-quick" class="icon-btn quick" title="رسالة سريعة">💙</button>
+    <input type="file" id="file-input" accept="image/*" hidden>
     <input type="file" id="music-input" accept="audio/*" hidden>
     <input type="file" id="doc-input" hidden>
-    <textarea id="msg-input" rows="1" placeholder="اكتب رسالة... (~1 نص ~ للتلوين)"></textarea>
+    <textarea id="msg-input" rows="1" placeholder="اكتب رسالة..."></textarea>
     <button id="btn-mic" class="icon-btn mic" title="تسجيل">🎤</button>
     <button id="btn-send" class="icon-btn send" title="إرسال">➤</button>
   </footer>
-
-  <!-- منتقي الإيموجي -->
-  <div class="emoji-picker" id="emoji-picker">
-    <div class="emoji-grid" id="emoji-grid"></div>
-  </div>
 
   <!-- شريط تفاعلات الرسالة -->
   <div class="reactions-bar" id="reactions-bar">
@@ -261,28 +245,76 @@
     <span data-r="😡">😡</span>
   </div>
 
-  <!-- عارض الصور/الفيديو -->
+  <!-- عارض الصور -->
   <div class="viewer" id="viewer">
     <button id="viewer-close" class="icon-btn">✕</button>
     <div class="viewer-body" id="viewer-body"></div>
     <button id="viewer-download" class="btn small">تحميل ⬇</button>
   </div>
 
-  <!-- مشغل الصوت -->
-  <div class="audio-player" id="audio-player">
-    <span class="ap-ico">🎵</span>
-    <div class="ap-info">
-      <span id="ap-title">مقطع صوتي</span>
-      <audio id="ap-audio" controls></audio>
-    </div>
-    <button id="ap-download" class="icon-btn small">⬇</button>
-    <button id="ap-close" class="icon-btn small">✕</button>
-  </div>
-
-  <!-- توست -->
-  <div class="toast" id="toast"></div>
-
 </section>
+
+<!-- ============ عناصر عامة (خارج الشاشات) ============ -->
+<div class="sheet-backdrop" id="sheet-backdrop"></div>
+
+<!-- الإعدادات -->
+<div class="sheet" id="settings-panel">
+  <h3 class="sheet-title">⚙️ الإعدادات</h3>
+  <div class="set-avatar-wrap">
+    <div class="set-avatar" id="set-avatar-preview">?</div>
+    <button id="set-avatar-btn" class="btn small">📷 تغيير الصورة</button>
+    <div class="up-status" id="set-avatar-status"></div>
+  </div>
+  <input type="file" id="set-avatar" accept="image/*" hidden>
+
+  <label for="set-name">اسمك المزخرف</label>
+  <input id="set-name" maxlength="24" placeholder="اسمك...">
+
+  <label for="set-note">ملاحظة تظهر تحت اسمك (تظهر كاسم هاتفك)</label>
+  <input id="set-note" maxlength="60" placeholder="مثال: هاتف حمزة 📱">
+
+  <label for="set-net-mode">اتصالي الآن (يظهر في ملفك التعريفي)</label>
+  <select id="set-net-mode">
+    <option value="auto">تلقائي</option>
+    <option value="wifi">واي فاي</option>
+    <option value="cell">بيانات</option>
+  </select>
+
+  <label for="set-wifi">اسم شبكة الواي فاي</label>
+  <input id="set-wifi" maxlength="32" placeholder="اكتب اسم شبكتك مرة واحدة">
+
+  <button id="set-save" class="btn btn-primary small">حفظ الإعدادات</button>
+  <button id="set-profile" class="btn btn-ghost small">👤 عرض ملفي التعريفي</button>
+  <button id="set-close" class="btn btn-ghost small">إغلاق</button>
+</div>
+
+<!-- نماذج (مقاسات الواجهة) -->
+<div class="sheet" id="model-pop">
+  <h3 class="sheet-title">📐 نماذج الواجهة</h3>
+  <p class="sheet-sub">اختر النموذج الذي تظهر فيه الأزرار بشكل صحيح على جهازك</p>
+  <div class="model-grid" id="model-grid"></div>
+  <button id="model-close" class="btn btn-ghost small">إغلاق</button>
+</div>
+
+<!-- الخط -->
+<div class="sheet" id="font-pop">
+  <h3 class="sheet-title">🖋 حجم الخط</h3>
+  <div class="size-row" id="font-steps"></div>
+  <div class="size-label" id="font-label"></div>
+  <div class="size-preview" id="font-preview">هكذا سيظهر نص الرسائل 💙</div>
+  <button id="font-close" class="btn btn-ghost small">إغلاق</button>
+</div>
+
+<!-- الملف التعريفي -->
+<div class="sheet" id="profile-modal">
+  <div class="pm-head">
+    <div class="pm-avatar" id="pm-avatar">?</div>
+    <div class="pm-name" id="pm-name">—</div>
+    <div class="pm-note" id="pm-note"></div>
+  </div>
+  <div class="pm-rows" id="pm-rows"></div>
+  <button id="pm-close" class="btn btn-ghost small">إغلاق</button>
+</div>
 
 <!-- نافذة التأكيد -->
 <div class="confirm-modal" id="confirm-modal">
@@ -296,6 +328,9 @@
   </div>
 </div>
 
+<!-- توست -->
+<div class="toast" id="toast"></div>
+
 <!-- شاشة فخ التهكير -->
 <div class="hack-overlay" id="hack-overlay">
   <div class="hack-scan"></div>
@@ -307,7 +342,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
-<script src="firebase.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="firebase.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
-  </html>
+</html>

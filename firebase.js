@@ -1,5 +1,5 @@
 /* ============================================================
-   firebase.js  (الإصدار 2 — إصلاح اقتران المحادثات + تعديل/حذف)
+   firebase.js  (الإصدار 5)
    - الاتصال بالخادم (Realtime Database + Storage)
    - إذا لم تُملأ بيانات Firebase، يعمل الموقع محلياً (localStorage)
    - كل رسالة تُخزَّن تحت مفتاح محادثة ثابت:  chats/{chatId}/messages
@@ -26,6 +26,17 @@ const FIREBASE_CONFIG = {
 const CHAT_USERS = ['hamza', 'rawaha'];
 
 /* ============================================================
+   إشعارات حتى لو الموقع مغلق (اختياري)
+   اتركها فارغة وكل شيء يعمل عدا الإشعار عند إغلاق المتصفح تماماً.
+   بعد نشر ملف push-worker.js على Cloudflare ضع رابطه في workerUrl.
+   ============================================================ */
+const PUSH_CONFIG = {
+  workerUrl: 'https://snowy-mouse-9753.mdenserea2.workers.dev',
+  publicKey: 'BKrPKz4pkSpwOL4vW1tMmWlm4MaUngqvvaEIhyHBnTlhEKk2A959ScjMf0LaOv6Vd3kmS37EyzduuOTOcY1aSBs',
+  secret:    'Vm5q9ghc8BE4cTzlzd7fPkVW'
+};
+
+/* ============================================================
    حالة الاتصال
    ============================================================ */
 let fbReady = false;
@@ -48,7 +59,12 @@ function initFirebase() {
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     fbDB = firebase.database();
-    try { fbStorage = firebase.storage(); } catch (e) { console.warn('[Firebase] Storage غير متاح'); }
+    try {
+      fbStorage = firebase.storage();
+      /* لا ننتظر دقائق إن كان Storage غير مفعّل — نتحول فوراً للبديل */
+      fbStorage.setMaxUploadRetryTime(15000);
+      fbStorage.setMaxOperationRetryTime(15000);
+    } catch (e) { console.warn('[Firebase] Storage غير متاح'); }
     fbReady = true;
     fbDB.ref('.info/connected').on('value', s => {
       fbConnected = !!s.val();
@@ -104,14 +120,17 @@ const Store = {
   /* ---------- مستمع رسائل محادثة واحدة ----------
      handlers: { added(msg,id), changed(msg,id), removed(msg,id) }
      يُرجع دالة لإيقاف الاستماع                                   */
-  listenChat(chatId, handlers) {
+  listenChat(chatId, handlers, limit) {
     const h = handlers || {};
+    limit = limit || 50;
 
     if (fbReady) {
-      const ref = fbDB.ref('chats/' + chatId + '/messages').orderByKey().limitToLast(300);
+      const ref = fbDB.ref('chats/' + chatId + '/messages').orderByKey().limitToLast(limit);
       const onAdd = ref.on('child_added',   s => h.added   && h.added(s.val(), s.key));
       const onChg = ref.on('child_changed', s => h.changed && h.changed(s.val(), s.key));
       const onRem = ref.on('child_removed', s => h.removed && h.removed(s.val(), s.key));
+      /* حدث 'value' يصل بعد كل الرسائل الأولية → نعرضها دفعة واحدة */
+      ref.once('value', () => h.ready && h.ready());
       return () => {
         ref.off('child_added', onAdd);
         ref.off('child_changed', onChg);
@@ -146,6 +165,7 @@ const Store = {
     window.addEventListener('storage', onStorage);     // تبويب/نافذة أخرى
     window.addEventListener('local-msgs', sync);       // نفس الصفحة
     sync();
+    setTimeout(() => h.ready && h.ready(), 0);
     return () => {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('local-msgs', sync);
@@ -198,6 +218,7 @@ const Store = {
   async deleteMessage(chatId, id, msg) {
     if (fbReady) {
       await fbDB.ref('chats/' + chatId + '/messages/' + id).remove();
+      if (msg && msg.mediaKey) { fbDB.ref('media/' + chatId + '/' + msg.mediaKey).remove().catch(() => {}); }
       /* محاولة حذف المرفق من التخزين (اختياري، لا يوقف الحذف عند الفشل) */
       try {
         if (msg && msg.url && /^https?:/.test(msg.url) && fbStorage) {
@@ -248,6 +269,7 @@ const Store = {
   async clearChat(chatId, msgs) {
     if (fbReady) {
       await fbDB.ref('chats/' + chatId + '/messages').remove();
+      fbDB.ref('media/' + chatId).remove().catch(() => {});
       /* حذف المرفقات من التخزين (اختياري) */
       try {
         for (const m of (msgs || [])) {
@@ -333,42 +355,127 @@ const Store = {
     return Promise.resolve();
   },
 
-  /* ---------- تحديث آخر ظهور ---------- */
-  updateLastSeen(uid) {
-    return this.saveUser(uid, { lastSeen: Date.now() });
+  /* ---------- نبضة الحضور + معلومات الجهاز ---------- */
+  heartbeat(uid, device) {
+    const d = { lastSeen: Date.now(), online: true };
+    if (device) d.device = device;
+    return this.saveUser(uid, d);
+  },
+  updateLastSeen(uid) { return this.heartbeat(uid); },
+
+  /* ---------- حضور فوري: يصبح غير متصل لحظة إغلاق الموقع ---------- */
+  presence(uid) {
+    if (!fbReady || !uid) return;
+    try {
+      const ref = fbDB.ref('users/' + uid);
+      ref.onDisconnect()
+        .update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP })
+        .then(() => ref.update({ online: true, lastSeen: Date.now() }))
+        .catch(() => {});
+    } catch (e) {}
   },
 
-  /* ---------- رفع ملف (صورة/صوت/مستند) ---------- */
-  async uploadFile(file, onProgress) {
-    return new Promise((resolve, reject) => {
-      if (fbReady) {
-        const path = 'uploads/' + Date.now() + '_' + file.name;
-        const ref = fbStorage.ref(path);
-        const task = ref.put(file);
-        task.on('state_changed',
-          snap => { if (onProgress) onProgress(snap.bytesTransferred / snap.totalBytes); },
-          err => reject(err),
-          async () => { resolve(await task.snapshot.ref.getDownloadURL()); }
-        );
-      } else {
-        // محلي: تحويل إلى Base64
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+  /* ---------- حفظ اشتراك الإشعارات ---------- */
+  savePush(uid, sub) {
+    if (!fbReady || !uid || !sub) return;
+    try { fbDB.ref('push/' + uid).set(JSON.parse(JSON.stringify(sub))).catch(() => {}); } catch (e) {}
+  },
+
+  /* ---------- تحميل رسائل أقدم (صفحة) ---------- */
+  async loadOlder(chatId, beforeKey, n) {
+    if (fbReady) {
+      let q = fbDB.ref('chats/' + chatId + '/messages').orderByKey();
+      if (beforeKey) q = q.endAt(beforeKey);
+      const snap = await q.limitToLast(n + 1).once('value');
+      const out = [];
+      snap.forEach(c => { if (c.key !== beforeKey) out.push({ id: c.key, val: c.val() }); });
+      return out;
+    }
+    const mine = lsReadMsgs().filter(m => m.chatId === chatId);
+    const idx = beforeKey ? mine.findIndex(m => m._id === beforeKey) : mine.length;
+    const end = idx < 0 ? mine.length : idx;
+    return mine.slice(Math.max(0, end - n), end).map(m => ({ id: m._id, val: m }));
+  },
+
+  /* ---------- كل الرسائل (للبحث فقط) ---------- */
+  async loadAll(chatId) {
+    if (fbReady) {
+      const snap = await fbDB.ref('chats/' + chatId + '/messages').orderByKey().once('value');
+      const out = [];
+      snap.forEach(c => { out.push({ ...c.val(), _id: c.key }); });
+      return out;
+    }
+    return lsReadMsgs().filter(m => m.chatId === chatId);
+  },
+
+  /* ---------- رفع وسائط ----------
+     1) Firebase Storage (إن كان مفعّلاً)
+     2) إن فشل أو تأخر → نحفظ الملف داخل قاعدة البيانات (media/…) ويعمل دائماً
+     يرجع { url } أو { mediaKey }                                            */
+  async putMedia(chatId, file, onProgress) {
+    const report = p => { try { onProgress && onProgress(Math.max(0, Math.min(1, p))); } catch (e) {} };
+    report(0.02);
+
+    if (fbReady && fbStorage) {
+      try {
+        const url = await new Promise((resolve, reject) => {
+          const safe = (file.name || 'file').replace(/[^\w.\-]/g, '_').slice(-60);
+          const task = fbStorage.ref('uploads/' + Date.now() + '_' + safe)
+            .put(file, file.type ? { contentType: file.type } : undefined);
+          let dog = null;
+          const arm = ms => {
+            clearTimeout(dog);
+            dog = setTimeout(() => { try { task.cancel(); } catch (e) {} reject(new Error('stall')); }, ms);
+          };
+          arm(9000);
+          task.on('state_changed',
+            s => { arm(12000); report(0.02 + 0.96 * (s.bytesTransferred / Math.max(1, s.totalBytes))); },
+            err => { clearTimeout(dog); reject(err); },
+            async () => {
+              clearTimeout(dog);
+              try { resolve(await task.snapshot.ref.getDownloadURL()); } catch (e) { reject(e); }
+            });
+        });
+        report(1);
+        return { url };
+      } catch (e) {
+        console.warn('[Storage] تعذّر الرفع، سيتم الحفظ في قاعدة البيانات بدلاً منه:', e && e.message);
       }
+    }
+
+    /* البديل: base64 */
+    const dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onprogress = e => { if (e.lengthComputable) report(0.05 + 0.4 * (e.loaded / e.total)); };
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(r.error || new Error('read'));
+      r.readAsDataURL(file);
     });
+    report(0.5);
+    if (!fbReady) { report(1); return { url: dataUrl }; }
+    if (dataUrl.length > 9 * 1024 * 1024) throw new Error('big');
+    const key = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    await fbDB.ref('media/' + chatId + '/' + key).set(dataUrl);
+    report(1);
+    return { mediaKey: key };
   },
 
-  /* ---------- حفظ/استرجاع المسودات ---------- */
-  saveDraft(uid, dataUrl) {
-    try { localStorage.setItem('draft_' + uid, dataUrl); } catch (e) {}
+  /* ---------- جلب وسائط محفوظة في قاعدة البيانات ---------- */
+  _mediaCache: new Map(),
+  async getMedia(chatId, key) {
+    const ck = chatId + '/' + key;
+    if (this._mediaCache.has(ck)) return this._mediaCache.get(ck);
+    if (!fbReady) return '';
+    const snap = await fbDB.ref('media/' + ck).once('value');
+    const v = snap.val() || '';
+    if (v) this._mediaCache.set(ck, v);
+    return v;
   },
-  getDraft(uid) {
-    return localStorage.getItem('draft_' + uid);
-  },
-  clearDraft(uid) {
-    localStorage.removeItem('draft_' + uid);
+
+  /* قديم (للتوافق) */
+  async uploadFile(file, onProgress) {
+    const r = await this.putMedia('legacy', file, onProgress);
+    return r.url || '';
   }
 };
 

@@ -25,7 +25,7 @@ body[data-theme="hamza"] {
   --bubble-me:#0f1408; --bubble-me-border:#5a7a2a;
   --bubble-other:#0a0a0a; --bubble-other-border:#2a3a1a;
   --accent:#7ab82a;
-  --ov1:rgba(5,10,5,.85); --ov2:rgba(5,10,5,.93);
+  --ov1:rgba(5,10,5,.75); --ov2:rgba(5,10,5,.85);
 }
 /* سمة رواحة (أحمر + خمري) */
 body[data-theme="rawaha"] {
@@ -34,7 +34,7 @@ body[data-theme="rawaha"] {
   --bubble-me:#1a0303; --bubble-me-border:#ff2d2d;
   --bubble-other:#120202; --bubble-other-border:#7a0e0e;
   --accent:#ff2d2d;
-  --ov1:rgba(10,2,2,.85); --ov2:rgba(10,2,2,.93);
+  --ov1:rgba(10,2,2,.75); --ov2:rgba(10,2,2,.85);
 }
 
 /* ============================================================
@@ -1191,3 +1191,265 @@ body[data-theme="rawaha"] .chat-input { position:relative; z-index:1; }
 
 /* دوران أيقونة التحديث */
 .spin-once { animation:spin .7s ease; }
+
+
+/* ============================================================
+   الإصدار 5 — تحسينات الأداء + الميزات الجديدة
+   ============================================================ */
+:root { --s:1; --fs:1; --hdr-h:66px; --inp-h:70px; }
+
+/* ---------- أداء: بلا blur ثقيل ولا خلفية ثابتة ---------- */
+.orb { filter:none; opacity:.4; }
+.orb-a { background:radial-gradient(circle, var(--accent) 0%, transparent 68%); }
+.orb-b { background:radial-gradient(circle, var(--c2) 0%, transparent 68%); }
+.orb-c { background:radial-gradient(circle, var(--c6) 0%, transparent 68%); opacity:.2; }
+body.in-chat .bg-3d { display:none; }
+.chat-header, .chat-input, .inbox-header { backdrop-filter:none; -webkit-backdrop-filter:none; }
+.chat-header { background:rgba(0,0,0,.72); }
+.chat-input  { background:rgba(0,0,0,.8); }
+body[data-theme] #screen-chat { background-attachment:scroll; }
+body[data-theme] #screen-chat::before { position:absolute; }
+.messages { scroll-behavior:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+.msg-bubble { transition:transform .15s, box-shadow .15s; font-size:calc(14.5px * var(--fs)); }
+.msg-bubble:hover { transform:none; box-shadow:none; }
+@media (hover:hover) { .msg-bubble:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(0,0,0,.4); } }
+
+/* ---------- مقاسات النماذج ---------- */
+.icon-btn { width:calc(42px * var(--s)); height:calc(42px * var(--s)); font-size:calc(18px * var(--s)); }
+.icon-btn.small { width:calc(32px * var(--s)); height:calc(32px * var(--s)); font-size:calc(14px * var(--s)); }
+.chat-header .icon-btn { width:calc(36px * var(--s)); height:calc(36px * var(--s)); font-size:calc(16px * var(--s)); }
+.chat-header { padding:calc(12px * var(--s)) 14px; }
+.header-avatar { width:calc(42px * var(--s)); height:calc(42px * var(--s)); }
+.hdr-name { font-size:calc(15px * var(--fs)); }
+.btn { padding:calc(14px * var(--s)) calc(28px * var(--s)); font-size:calc(15px * var(--s)); }
+.btn.small { padding:calc(8px * var(--s)) calc(16px * var(--s)); font-size:calc(13px * var(--s)); }
+.chat-input { padding:calc(10px * var(--s)) 12px; }
+#msg-input { min-height:calc(42px * var(--s)); font-size:calc(14px * var(--fs)); }
+.rec-btn { width:calc(38px * var(--s)); height:calc(38px * var(--s)); }
+.inbox-item-name { font-size:calc(16px * var(--fs)); }
+.inbox-item-last { font-size:calc(12px * var(--fs)); }
+.palette-bar { top:var(--hdr-h); }
+.chat-menu { top:calc(var(--hdr-h) - 4px); }
+
+/* ---------- الإدخال: ميك وإرسال ورسالة سريعة ---------- */
+.icon-btn.mic {
+  background:linear-gradient(135deg, #ff2d9e, #a02dff); border:none; color:#fff;
+  box-shadow:0 6px 18px rgba(255,45,158,.45), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.icon-btn.mic.recording { background:linear-gradient(135deg, #ef4444, #b91c1c); animation:micPulse 1.2s infinite; }
+.icon-btn.mic.has-draft::after {
+  content:''; position:absolute; top:4px; left:4px; width:9px; height:9px; border-radius:50%;
+  background:#f59e0b; border:1.5px solid #000;
+}
+@keyframes micPulse { 0%,100% { box-shadow:0 0 0 0 rgba(239,68,68,.65); } 50% { box-shadow:0 0 0 11px rgba(239,68,68,0); } }
+.icon-btn.send {
+  background:linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #000));
+  color:#fff; border:none; box-shadow:0 6px 18px var(--edge-glow);
+}
+.icon-btn.quick { font-size:calc(20px * var(--s)); }
+#msg-input.blur-armed { border-style:dashed; border-color:var(--accent); }
+
+/* ---------- لوحة (+) و التلوين ---------- */
+.options-panel { grid-template-columns:repeat(3, 1fr); bottom:calc(var(--inp-h) + 6px); width:min(300px, calc(100vw - 24px)); }
+.options-panel.open { display:grid; }
+.opt-btn { min-width:0; padding:10px 6px; }
+.rainbow-word {
+  font-weight:900;
+  background:linear-gradient(90deg, #ff2d2d, #ff8a2d, #ffd93d, #2dff7f, #2dffd9, #2d7fff, #a02dff, #ff2d9e, #ff2d2d);
+  background-size:300% 100%;
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent;
+  animation:rainbowMove 3s linear infinite;
+}
+@keyframes rainbowMove { to { background-position:300% 0; } }
+.pop-sheet {
+  position:absolute; left:12px; right:12px; bottom:calc(var(--inp-h) + 8px); z-index:35;
+  display:none; flex-direction:column; gap:12px; padding:14px;
+  background:rgba(0,0,0,.96); border:1px solid var(--edge); border-radius:18px;
+  box-shadow:0 20px 60px rgba(0,0,0,.8), 0 0 30px var(--edge-glow); animation:popIn .25s ease;
+}
+.pop-sheet.open { display:flex; }
+.pop-title { font-size:13px; font-weight:700; text-align:center; }
+.color-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:12px; }
+.color-chip { aspect-ratio:1; border-radius:50%; border:2px solid transparent; box-shadow:0 0 0 1px rgba(255,255,255,.18); }
+.color-chip.active { border-color:#fff; box-shadow:0 0 0 3px var(--accent), 0 0 14px currentColor; }
+.pop-sheet .btn-ghost { margin-top:0; }
+
+/* ---------- لوحة التسجيل ---------- */
+.record-panel { bottom:calc(var(--inp-h) + 6px); backdrop-filter:none; background:linear-gradient(135deg, rgba(255,45,45,.2), rgba(0,0,0,.95)); }
+.record-panel.paused .rec-wave span { animation-play-state:paused; }
+
+/* ---------- الفقاعات: حواف تلمع كل 12 ثانية ---------- */
+@property --ang { syntax:'<angle>'; inherits:false; initial-value:0deg; }
+.msg-bubble::before {
+  content:''; position:absolute; inset:-2px; border-radius:inherit; padding:2px; pointer-events:none;
+  background:conic-gradient(from var(--ang), transparent 0deg, transparent 240deg, var(--accent) 305deg, #fff 340deg, transparent 360deg);
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+  opacity:0; animation:borderSweep 12s linear infinite; animation-delay:var(--d, 0s);
+}
+@keyframes borderSweep {
+  0%   { --ang:0deg;   opacity:1; }
+  22%  { --ang:540deg; opacity:1; }
+  27%  { --ang:540deg; opacity:0; }
+  100% { --ang:540deg; opacity:0; }
+}
+.msg-row.pending .msg-bubble::before, .msg-bubble.editing::before { display:none; }
+@media (prefers-reduced-motion: reduce) { .msg-bubble::before { animation:none; } }
+
+/* ---------- الرد (المنشن) واضح ---------- */
+.msg-bubble .msg-reply {
+  display:flex; flex-direction:column; gap:2px; padding:7px 10px; margin-bottom:7px; border-radius:10px;
+  background:color-mix(in srgb, var(--accent) 18%, rgba(0,0,0,.55));
+  border-right:4px solid var(--accent); cursor:pointer; font-size:calc(12.5px * var(--fs)); color:#fff;
+}
+.msg-reply b { color:var(--accent); font-weight:800; display:block; margin:0; }
+.msg-reply span { color:#f3f3f3; opacity:.92; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.reply-preview { background:color-mix(in srgb, var(--accent) 14%, rgba(0,0,0,.85)); border-right-width:5px; padding:10px 12px; }
+.rp-name { font-size:13px; }
+.rp-text { color:#eee; font-size:12.5px; }
+
+/* ---------- الرسالة المغبشة: بلا أي نص ---------- */
+.msg-bubble.blurred::after { content:none; display:none; }
+.msg-bubble.blurred .msg-content { filter:blur(6px); pointer-events:none; opacity:.85; user-select:none; }
+
+/* ---------- السطر السفلي: منذ + تعديل + √ ---------- */
+.msg-meta { display:flex; align-items:center; gap:8px; margin-top:4px; font-size:10px; color:var(--muted); }
+.msg-time { display:inline; margin:0; text-align:start; }
+.msg-edited { font-style:italic; opacity:.9; color:#ffd54f; }
+.msg-edited::before { content:''; }
+.msg-status { margin:0; }
+.tk { font-weight:900; font-size:13px; line-height:1; }
+.tk.no { color:#ef4444; }
+.tk.ok { color:#22c55e; text-shadow:0 0 6px rgba(34,197,94,.6); }
+.msg-status .eye { font-size:10px; }
+.dl-note { margin-top:6px; font-size:10.5px; font-weight:700; color:#a7f3d0; }
+.msg-act.copy:hover { background:rgba(45,127,255,.28); }
+.msg-row.other .msg-actions { left:8px; }
+.msgs-loading, .older-box { align-self:center; font-size:12px; color:var(--muted); padding:8px 14px; }
+.older-box { border:1px solid var(--glass-border); border-radius:12px; background:rgba(0,0,0,.4); color:#fff; }
+.msg-image { width:100%; max-width:260px; height:auto; }
+.msg-image.lazy-blur { filter:blur(6px); transition:filter .3s; }
+
+/* ---------- رسالة الصوت الجميلة ---------- */
+.aud {
+  min-width:220px; display:flex; flex-direction:column; gap:7px; padding:9px 11px; border-radius:15px;
+  background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 24%, rgba(0,0,0,.55)), rgba(0,0,0,.5));
+  border:1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.aud-lbl { font-size:11.5px; font-weight:800; color:var(--accent); }
+.aud-row { display:flex; align-items:center; gap:10px; }
+.aud-play {
+  width:40px; height:40px; border-radius:50%; flex-shrink:0; display:grid; place-items:center; color:#fff; font-size:15px;
+  background:linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #000));
+  box-shadow:0 4px 14px var(--edge-glow);
+}
+.aud.playing .aud-play { animation:micPulse 1.4s infinite; }
+.aud-bars { flex:1; height:32px; display:flex; align-items:center; gap:2px; cursor:pointer; }
+.aud-bars i { flex:1; min-width:2px; max-width:5px; border-radius:3px; background:rgba(255,255,255,.28); transition:background .12s; }
+.aud-bars i.on { background:var(--accent); }
+.aud-time { font-size:11px; font-family:monospace; min-width:36px; text-align:center; }
+
+/* ---------- فقاعة جار الإرسال ---------- */
+.msg-row.pending .msg-bubble { border:1.5px dashed var(--accent); background:var(--bubble-me); }
+.pend-box { display:flex; flex-direction:column; gap:8px; min-width:180px; }
+.pend-img { max-width:190px; max-height:150px; border-radius:10px; filter:blur(3px) brightness(.7); display:block; }
+.pend-txt { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; }
+.pend-spin { width:15px; height:15px; border-radius:50%; border:2px solid rgba(255,255,255,.2); border-top-color:var(--accent); animation:spin .8s linear infinite; }
+.pend-bar { height:4px; border-radius:4px; background:rgba(255,255,255,.12); overflow:hidden; }
+.pend-bar i { display:block; height:100%; width:0; background:linear-gradient(90deg, var(--accent), #fff); transition:width .25s; }
+.msg-row.pending.failed .msg-bubble { border-color:#ef4444; }
+
+/* ---------- الإنبوكس ---------- */
+.inbox-toolbar { display:flex; gap:8px; padding:8px 12px; overflow-x:auto; background:rgba(0,0,0,.45); border-bottom:1px solid var(--glass-border); }
+.inbox-toolbar .hack-btn { padding:calc(8px * var(--s)) 14px; font-size:calc(13px * var(--s)); }
+.pill-btn {
+  display:flex; align-items:center; gap:6px; flex-shrink:0; padding:calc(8px * var(--s)) 14px; border-radius:12px;
+  font-weight:800; font-size:calc(13px * var(--s)); background:rgba(255,255,255,.06); border:1.5px solid var(--glass-border);
+}
+.pill-btn.models { border-color:#2d7fff; box-shadow:0 0 14px rgba(45,127,255,.3); }
+.pill-btn.font   { border-color:#a02dff; box-shadow:0 0 14px rgba(160,45,255,.3); }
+.st-text.on { color:#22c55e; font-size:11px; font-weight:800; margin-inline-start:8px; }
+.st-pill.off {
+  display:inline-block; margin-inline-start:8px; padding:2px 10px; border-radius:10px; background:#ef4444; color:#fff;
+  font-size:10.5px; font-weight:800; box-shadow:0 2px 10px rgba(239,68,68,.5);
+}
+.inbox-footer { display:flex; gap:10px; }
+.inbox-footer .btn { flex:1; width:auto; margin:0; }
+.hdr-status.offline { color:#f87171; }
+
+/* ---------- النوافذ: إعدادات / نماذج / خط / ملف تعريفي ---------- */
+.sheet-backdrop { position:fixed; inset:0; z-index:290; background:rgba(0,0,0,.62); display:none; }
+.sheet-backdrop.open { display:block; }
+.sheet {
+  position:fixed; left:50%; top:50%; transform:translate(-50%, -50%); width:min(92vw, 420px); max-height:86vh; overflow-y:auto;
+  z-index:300; display:none; flex-direction:column; gap:10px; padding:20px;
+  background:rgba(8,8,8,.97); border:1px solid var(--edge); border-radius:22px;
+  box-shadow:0 30px 80px rgba(0,0,0,.85), 0 0 40px var(--edge-glow); animation:sheetIn .28s ease;
+}
+.sheet.open { display:flex; }
+@keyframes sheetIn { from { opacity:0; transform:translate(-50%, -46%) scale(.96); } to { opacity:1; transform:translate(-50%, -50%) scale(1); } }
+.sheet-title { font-size:17px; text-align:center; color:var(--accent); }
+.sheet-sub { font-size:12px; color:var(--muted); text-align:center; }
+.sheet label { font-size:12px; color:var(--muted); margin-top:4px; }
+.sheet input, .sheet select {
+  width:100%; padding:10px 14px; background:rgba(255,255,255,.06); border:1px solid var(--glass-border);
+  border-radius:12px; font-size:14px; color:#fff; user-select:text;
+}
+.sheet select option { background:#111; }
+.sheet input:focus, .sheet select:focus { outline:none; border-color:var(--accent); }
+.sheet .btn-ghost { margin-top:0; width:100%; }
+.sheet .btn-primary { width:100%; margin-top:6px; }
+.set-avatar-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.set-avatar, .pm-avatar {
+  display:grid; place-items:center; font-weight:900; overflow:hidden; border:3px solid var(--edge);
+  border-radius:50%; background:linear-gradient(135deg, var(--accent), #000); box-shadow:0 0 30px var(--edge-glow);
+}
+.set-avatar { width:108px; height:108px; font-size:40px; }
+.pm-avatar { width:96px; height:96px; font-size:36px; }
+.set-avatar img, .pm-avatar img { width:100%; height:100%; object-fit:cover; }
+.up-status { min-height:18px; font-size:12.5px; font-weight:700; color:var(--accent); text-align:center; }
+
+.pm-head { display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; }
+.pm-name { font-size:19px; font-weight:900; }
+.pm-note { font-size:12px; color:var(--c3); font-style:italic; }
+.pm-rows { display:flex; flex-direction:column; gap:8px; }
+.pm-row {
+  display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:14px;
+  background:rgba(255,255,255,.05); border:1px solid var(--glass-border); font-size:13.5px;
+}
+.pm-k { color:var(--muted); font-weight:700; white-space:nowrap; }
+.pm-v { font-weight:800; display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; text-align:left; }
+.pm-v .ok { color:#22c55e; } .pm-v .bad { color:#ef4444; } .blue { color:#3b82f6; }
+.pm-muted { color:var(--muted); font-weight:600; font-size:12px; }
+.bat { display:inline-flex; align-items:center; gap:5px; }
+.chg { color:#22c55e; font-size:12px; }
+.pm-hint { text-align:center; font-size:11px; color:var(--muted); }
+
+.model-grid { display:flex; flex-direction:column; gap:8px; }
+.model-btn {
+  display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:14px; text-align:right;
+  background:rgba(255,255,255,.05); border:1.5px solid var(--glass-border);
+}
+.model-btn.active { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 16%, rgba(0,0,0,.4)); }
+.mb-n { font-weight:900; } .mb-d { flex:1; font-size:12px; color:var(--muted); }
+.mb-demo { display:grid; place-items:center; border-radius:10px; background:rgba(255,255,255,.1); border:1px solid var(--accent); flex-shrink:0; }
+
+.size-row { display:flex; align-items:flex-end; gap:3px; padding:12px 6px; border-radius:18px; background:rgba(255,255,255,.04); }
+.size-step {
+  flex:1; height:52px; border-radius:12px; display:grid; place-items:end center; padding-bottom:6px;
+  color:#aaa; font-weight:800; border:1.5px solid transparent;
+}
+.size-step.active { color:#fff; background:color-mix(in srgb, var(--accent) 30%, #000); border-color:var(--accent); box-shadow:0 0 16px var(--edge-glow); }
+.size-label { text-align:center; font-weight:800; color:var(--accent); font-size:13px; }
+.size-preview { padding:12px; border-radius:14px; text-align:center; background:rgba(255,255,255,.05); }
+
+/* ---------- البحث: مستطيل كامل لكل رسالة ---------- */
+.search-results { max-height:58vh; gap:8px; }
+.search-count { font-size:11.5px; color:var(--muted); padding:2px 2px 0; }
+.search-item { padding:10px 12px; border-radius:14px; background:rgba(255,255,255,.06); border:1.5px solid color-mix(in srgb, var(--accent) 38%, transparent); }
+.si-text { white-space:pre-wrap; font-size:calc(13.5px * var(--fs)); }
+
+/* ---------- التوست خارج الشاشات ---------- */
+.toast { z-index:9600; bottom:110px; }
+.msg-bubble .msg-reply b { color:var(--accent); }
+.sheet > *, .pop-sheet > * { flex-shrink:0; }
